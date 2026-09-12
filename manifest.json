@@ -4,6 +4,11 @@
   "version": "0.1.0",
   "description": "Write your own product teardown before the AI reveals its take.",
   "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": [
+    "https://api.anthropic.com/*",
+    "https://*/*",
+    "http://*/*"
+  ],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {

@@ -35,12 +35,87 @@
     button:hover {
       background: #4338ca;
     }
+    #fallbackActions {
+      display: flex;
+      gap: 8px;
+    }
+    /* Author-stylesheet rules always beat the UA stylesheet's [hidden] rule
+       regardless of specificity, so setting display:flex above silently
+       defeats fallbackActions.hidden unless we restate it here for the
+       [hidden] state explicitly. Without this, the Yes/No buttons show up
+       (and are clickable) before any real check has run. */
+    #fallbackActions[hidden] {
+      display: none;
+    }
+    #fallbackActions button {
+      flex: 1;
+    }
+    #fallbackNoBtn {
+      background: #333;
+    }
+    #fallbackNoBtn:hover {
+      background: #444;
+    }
+    #settingsToggle {
+      display: inline-block;
+      margin-top: 14px;
+      font-size: 12px;
+      color: #777;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    #settingsPanel {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid #333;
+    }
+    #settingsPanel label {
+      display: block;
+      font-size: 12px;
+      color: #999;
+      margin-bottom: 4px;
+    }
+    #claudeApiKeyInput {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 6px 8px;
+      border-radius: 6px;
+      border: 1px solid #333;
+      background: #1a1a1a;
+      color: #eee;
+      font-size: 12px;
+    }
+    #saveTokenBtn {
+      margin-top: 8px;
+      background: #333;
+    }
+    #saveTokenBtn:hover {
+      background: #444;
+    }
+    #settingsStatus {
+      margin-top: 6px;
+      font-size: 11px;
+      color: #777;
+    }
   </style>
 </head>
 <body>
   <h1>Teardown this product?</h1>
-  <div id="status">Skeleton only — logic comes Saturday.</div>
+  <div id="status">Click Start Teardown to analyze this page.</div>
+  <div id="fallbackActions" hidden>
+    <button id="fallbackYesBtn">Yes</button>
+    <button id="fallbackNoBtn">No</button>
+  </div>
   <button id="startBtn">Start Teardown</button>
+
+  <span id="settingsToggle">Settings</span>
+  <div id="settingsPanel" hidden>
+    <label for="claudeApiKeyInput">Claude API key</label>
+    <input type="password" id="claudeApiKeyInput" placeholder="sk-ant-...">
+    <button id="saveTokenBtn">Save key</button>
+    <div id="settingsStatus"></div>
+  </div>
+
   <script src="popup.js"></script>
 </body>
 </html>
