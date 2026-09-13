@@ -3,22 +3,22 @@
 // Not a manifest-declared content script, so this only runs when the icon
 // is clicked, same "on demand, not persistent" principle popup.js used to
 // rely on. Owns the same UI logic popup.js used to: the page-check
-// trigger, the homepage-fallback prompt, the write-then-reveal 4-field
+// trigger, the homepage-fallback prompt, the write-then-reveal 5-field
 // teardown flow, the summary page, and the settings view — just mounted
 // into the page's own DOM instead of a native popup, so it can be
 // positioned (anchored near the bottom third of the viewport) the way a
 // popup anchored under the toolbar icon never could.
 //
-// Everything renders inside a Shadow DOM. Real-world testing showed the
+// Everything renders inside a Shadow DOM. Real-world testing showed an
 // earlier light-DOM version (styled via chrome.scripting.insertCSS) had
 // its inputs/buttons rendered white on Amazon and LinkedIn — both sites
 // have their own broad, high-specificity styling for raw <input>/<button>
-// elements that our .teardown-* classes couldn't reliably out-rank no
-// matter how the CSS was tuned. A shadow root's whole purpose is blocking
-// exactly that: the page's stylesheets never reach in, and ours never leak
-// out. The CSS lives inline here (a template string appended to the
-// shadow root) rather than as a separate file, since insertCSS injects
-// into the page's own <head>, which can't reach into a shadow tree at all.
+// elements that .teardown-* classes couldn't reliably out-rank no matter
+// how the CSS was tuned. A shadow root's whole purpose is blocking exactly
+// that: the page's stylesheets never reach in, and ours never leak out.
+// The CSS lives inline here (a template string appended to the shadow
+// root) rather than as a separate file, since insertCSS injects into the
+// page's own <head>, which can't reach into a shadow tree at all.
 
 (function () {
   const HOST_ID = "teardown-overlay-host";
@@ -34,10 +34,13 @@
   const host = document.createElement("div");
   host.id = HOST_ID;
   // Set inline (not via the shadow stylesheet) so the host element's own
-  // box — position, layering, click-through — can't be knocked over by
-  // some page-wide light-DOM rule targeting divs generically. Inline
-  // styles beat any external stylesheet short of the page using
-  // !important against our specific id, which is vanishingly unlikely.
+  // box — position, layering, click-through, the ambient background —
+  // can't be knocked over by some page-wide light-DOM rule targeting divs
+  // generically. Inline styles beat any external stylesheet short of the
+  // page using !important against our specific id, which is vanishingly
+  // unlikely. The background is the design spec's ".overlay" gradient,
+  // kept behind the modal; pointer-events:none means it's purely visual —
+  // it doesn't block clicks/scroll on the real page underneath.
   host.style.cssText =
     "all: initial;" +
     "position: fixed;" +
@@ -49,7 +52,11 @@
     "padding: 24px;" +
     "padding-bottom: 8vh;" +
     "box-sizing: border-box;" +
-    "pointer-events: none;";
+    "pointer-events: none;" +
+    "background:" +
+    "  radial-gradient(circle at 12% 10%, rgba(139, 92, 246, 0.18), transparent 34%)," +
+    "  radial-gradient(circle at 88% 90%, rgba(34, 211, 238, 0.12), transparent 30%)," +
+    "  rgba(5, 7, 12, 0.66);";
   document.body.appendChild(host);
 
   const shadow = host.attachShadow({ mode: "open" });
@@ -60,39 +67,38 @@
         box-sizing: border-box;
       }
 
+      :host {
+        --accent-gradient: linear-gradient(135deg, #8B5CF6 0%, #6366F1 52%, #22D3EE 100%);
+      }
+
+      /* The card itself never scrolls — it's a fixed frame so the close
+         button (top-right) and gear/home button (bottom-left) can be
+         pinned via position:absolute / normal flow against ITS box and
+         stay put regardless of how much the content inside scrolls. Only
+         .teardown-scroll (below), a separate inner element, actually
+         scrolls. */
       .teardown-card {
         pointer-events: auto;
         position: relative;
+        display: flex;
+        flex-direction: column;
         width: 560px;
         max-width: 92vw;
         max-height: 70vh;
-        overflow-y: auto;
-        overflow-x: hidden;
-        padding: 24px;
-        padding-bottom: 56px; /* room for the gear/home button in the corner */
-        color: #f5f5f5;
+        overflow: hidden; /* clip content to the rounded corners */
+        color: #F5F7FB;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         font-size: 13px;
         line-height: 1.5;
 
-        /* Liquid glass treatment, monochrome: clear dark glass, white
-           specular highlights and borders, no color tint anywhere.
-           backdrop-filter blurs whatever's actually behind the card — on
-           a bright page a lower-opacity tint here would let that
-           brightness wash straight through. High opacity keeps the card
-           reliably dark (and the white text readable) no matter what
-           page it's sitting on top of. */
-        background: rgba(15, 15, 15, 0.88);
-        -webkit-backdrop-filter: blur(24px);
-        backdrop-filter: blur(24px);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 20px;
+        background: rgba(20, 22, 30, 0.78);
+        -webkit-backdrop-filter: blur(24px) saturate(125%);
+        backdrop-filter: blur(24px) saturate(125%);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 18px;
         box-shadow:
-          0 12px 40px rgba(0, 0, 0, 0.45),
-          0 1px 0 rgba(255, 255, 255, 0.08) inset;
-
-        scrollbar-width: thin;
-        scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+          0 24px 72px rgba(0, 0, 0, 0.52),
+          inset 0 1px 0 rgba(255, 255, 255, 0.10);
       }
 
       /* The summary page has meaningfully more to read than any
@@ -103,165 +109,198 @@
         max-height: 85vh;
       }
 
-      .teardown-card::-webkit-scrollbar {
+      /* The one part of the card that actually scrolls, as a flex child
+         so it fills whatever space the fixed-frame card gives it.
+         min-height:0 is load-bearing — without it a flex child won't
+         shrink below its content size, so overflow-y:auto would never
+         actually kick in. */
+      .teardown-scroll {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: 24px;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+      }
+
+      .teardown-scroll::-webkit-scrollbar {
         width: 8px;
       }
 
-      .teardown-card::-webkit-scrollbar-track {
+      .teardown-scroll::-webkit-scrollbar-track {
         background: transparent;
       }
 
-      .teardown-card::-webkit-scrollbar-thumb {
+      .teardown-scroll::-webkit-scrollbar-thumb {
         background: rgba(255, 255, 255, 0.25);
         border-radius: 8px;
       }
 
-      .teardown-card::-webkit-scrollbar-thumb:hover {
+      .teardown-scroll::-webkit-scrollbar-thumb:hover {
         background: rgba(255, 255, 255, 0.4);
       }
 
-      /* Soft white specular highlight in the corner, like a light
-         reflection on glass. Kept inside the card's own box since
-         overflow-y:auto above would clip anything positioned outside it. */
-      .teardown-card::before {
-        content: "";
-        position: absolute;
-        top: -10px;
-        left: -10px;
-        width: 110px;
-        height: 110px;
-        background: radial-gradient(circle, rgba(255, 255, 255, 0.2), transparent 70%);
-        border-radius: 50%;
-        filter: blur(6px);
-        pointer-events: none;
-      }
-
-      .teardown-close-btn {
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        width: 26px;
-        height: 26px;
-        padding: 0;
-        margin: 0;
-        border-radius: 50%;
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        background: rgba(255, 255, 255, 0.08);
-        color: #eee;
-        font-size: 15px;
-        line-height: 1;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .teardown-close-btn:hover {
-        background: rgba(255, 255, 255, 0.18);
-      }
-
-      /* Gear (settings) and home (back from settings) buttons share this
-         style and the same bottom-left spot — only one is ever visible. */
-      .teardown-corner-btn {
-        position: absolute;
-        bottom: 16px;
-        left: 16px;
-        width: 30px;
-        height: 30px;
-        padding: 0;
-        margin: 0;
-        border-radius: 50%;
-        border: 1px solid rgba(255, 255, 255, 0.18);
-        background: rgba(255, 255, 255, 0.08);
-        color: #eee;
-        font-size: 15px;
-        line-height: 1;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .teardown-corner-btn:hover {
-        background: rgba(255, 255, 255, 0.18);
-      }
-
-      .teardown-corner-btn[hidden] {
-        display: none;
-      }
-
       .teardown-title {
-        font-size: 16px;
-        font-weight: 600;
-        margin: 0 24px 12px 0;
+        font-size: 22px;
+        font-weight: 700;
+        line-height: 1.25;
+        margin: 0 44px 14px 0;
+        color: #F5F7FB;
       }
 
       .teardown-status {
         font-size: 13px;
-        color: #cfcfcf;
+        color: #A7ADBC;
         margin-bottom: 4px;
       }
 
-      button {
+      .teardown-status--error {
+        color: #FB7185;
+      }
+
+      .teardown-microprompt {
+        font-size: 12px;
+        color: #A7ADBC;
+        margin-bottom: 12px;
+      }
+
+      button,
+      input {
         font-family: inherit;
       }
 
-      .teardown-btn {
+      /* Base button geometry, shared by primary/secondary. */
+      .teardown-btn-block {
         display: block;
         width: 100%;
         margin-top: 12px;
         padding: 10px 14px;
         border-radius: 12px;
-        border: 1px solid rgba(255, 255, 255, 0.18);
-        background: rgba(255, 255, 255, 0.08);
-        -webkit-backdrop-filter: blur(8px);
-        backdrop-filter: blur(8px);
-        color: #fff;
         font-size: 13px;
         cursor: pointer;
-        transition: background 0.15s ease;
+        transition: background 0.15s ease, border-color 0.15s ease;
       }
 
-      .teardown-btn:hover {
-        background: rgba(255, 255, 255, 0.16);
-      }
-
-      .teardown-btn[hidden] {
+      .teardown-btn-block[hidden] {
         display: none;
       }
 
-      /* Primary action stands out through brightness/opacity only, no
-         color tint — keeps the whole overlay monochrome. */
-      .teardown-btn-primary {
-        background: rgba(255, 255, 255, 0.18);
-        border-color: rgba(255, 255, 255, 0.35);
-        font-weight: 600;
+      .primary-button {
+        color: #ffffff;
+        background: linear-gradient(135deg, #8B5CF6, #6366F1);
+        border: 1px solid rgba(196, 181, 253, 0.52);
+        box-shadow: 0 8px 24px rgba(99, 102, 241, 0.28), 0 0 0 1px rgba(167, 139, 250, 0.10);
       }
 
-      .teardown-btn-primary:hover {
-        background: rgba(255, 255, 255, 0.28);
+      .primary-button:hover {
+        filter: brightness(1.08);
       }
 
-      .teardown-fallback-actions {
+      .secondary-button {
+        color: #D5D9E3;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+      }
+
+      .secondary-button:hover {
+        background: rgba(167, 139, 250, 0.11);
+        border-color: rgba(167, 139, 250, 0.35);
+      }
+
+      .teardown-confirm-actions {
         display: flex;
         gap: 8px;
       }
 
-      .teardown-fallback-actions[hidden] {
+      .teardown-confirm-actions[hidden] {
         display: none;
       }
 
-      .teardown-fallback-actions .teardown-btn {
+      .teardown-confirm-actions .teardown-btn-block {
         flex: 1;
       }
 
-      /* Simple CSS spinner for the "Analyzing" loading state. */
+      /* Icon buttons: close (top-right, always present) and gear/home
+         (settings toggle — only one visible at a time). Gear/home are
+         deliberately NOT position:absolute: floating one over the
+         scrollable content meant it always sat on top of whatever text
+         happened to be scrolled to the bottom at that moment. Living in
+         normal flow, as the very last thing after #teardown-main's or
+         #teardown-settings-view's own content, means it only ever appears
+         after the real content ends. */
+      .icon-button {
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #9CA3AF;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 999px;
+        font-size: 15px;
+        line-height: 1;
+        cursor: pointer;
+      }
+
+      .icon-button:hover {
+        color: #E9D5FF;
+        background: rgba(167, 139, 250, 0.14);
+        border-color: rgba(167, 139, 250, 0.36);
+      }
+
+      .icon-button[hidden] {
+        display: none;
+      }
+
+      .teardown-close-btn {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+      }
+
+      .teardown-corner-btn {
+        margin-top: 20px;
+      }
+
+      /* Progress indicator: "Question X of 5" + a five-segment row, shown
+         only during the one-at-a-time question flow. */
+      .teardown-progress {
+        margin-bottom: 16px;
+      }
+
+      .teardown-progress-label {
+        font-size: 12px;
+        color: #A7ADBC;
+        margin-bottom: 6px;
+      }
+
+      .teardown-progress-row {
+        display: flex;
+        gap: 6px;
+      }
+
+      .progress-track {
+        flex: 1;
+        height: 4px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.09);
+      }
+
+      .progress-track.progress-fill {
+        background: var(--accent-gradient);
+      }
+
+      /* Analyzing screen: orb loader + rotating status lines beneath it. */
       .teardown-loading {
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 12px;
+        gap: 16px;
         padding: 28px 0;
       }
 
@@ -269,16 +308,28 @@
         display: none;
       }
 
-      .teardown-spinner {
-        width: 28px;
-        height: 28px;
-        border-radius: 50%;
-        border: 3px solid rgba(255, 255, 255, 0.2);
-        border-top-color: rgba(255, 255, 255, 0.9);
-        animation: teardown-spin 0.8s linear infinite;
+      /* Soft ambient glow behind the spinning disc, static — the actual
+         "is something happening" signal is the conic-gradient disc inside
+         it, continuously rotating like a spinning globe/wheel. */
+      .analysis-orb {
+        position: relative;
+        width: 112px;
+        height: 112px;
+        border-radius: 999px;
+        background: radial-gradient(circle, rgba(139, 92, 246, 0.18) 0%, rgba(34, 211, 238, 0.06) 50%, transparent 75%);
+        filter: blur(6px);
       }
 
-      @keyframes teardown-spin {
+      .analysis-orb-spin {
+        position: absolute;
+        inset: 14px;
+        border-radius: 50%;
+        background: conic-gradient(from 0deg, #8B5CF6, #22D3EE, #8B5CF6);
+        box-shadow: 0 0 30px rgba(139, 92, 246, 0.4);
+        animation: teardown-orb-spin 1.6s linear infinite;
+      }
+
+      @keyframes teardown-orb-spin {
         to {
           transform: rotate(360deg);
         }
@@ -286,11 +337,7 @@
 
       .teardown-loading-text {
         font-size: 13px;
-        color: rgba(245, 245, 245, 0.75);
-      }
-
-      input {
-        font-family: inherit;
+        color: #A7ADBC;
       }
 
       .teardown-input {
@@ -298,8 +345,8 @@
         padding: 8px 10px;
         border-radius: 10px;
         border: 1px solid rgba(255, 255, 255, 0.18);
-        background: rgba(255, 255, 255, 0.1);
-        color: #f5f5f5;
+        background: rgba(41, 44, 56, 0.72);
+        color: #F5F7FB;
         font-size: 13px;
         /* Strip native input chrome (autofill tint, platform focus ring,
            etc.) so the shadow root's own glass styling is the only thing
@@ -312,21 +359,17 @@
 
       .teardown-input:focus {
         outline: none;
-        border-color: rgba(255, 255, 255, 0.4);
-        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15);
+        border-color: rgba(167, 139, 250, 0.5);
+        box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.18);
       }
 
       .teardown-input::placeholder {
-        color: rgba(245, 245, 245, 0.45);
-      }
-
-      .teardown-answer-block {
-        margin-bottom: 10px;
+        color: rgba(167, 173, 188, 0.6);
       }
 
       .teardown-answer-label {
         font-size: 11px;
-        color: rgba(245, 245, 245, 0.55);
+        color: #A7ADBC;
         text-transform: uppercase;
         letter-spacing: 0.02em;
         margin-bottom: 2px;
@@ -334,106 +377,241 @@
 
       .teardown-answer-text {
         font-size: 13px;
+        color: #F5F7FB;
+      }
+
+      /* Reveal cards (per-field) and summary cards share these — the
+         user's own answer in blue-tinted glass, Claude's in violet/cyan. */
+      .teardown-answer-card {
+        padding: 10px 12px;
+        border-radius: 12px;
+        margin-bottom: 10px;
+      }
+
+      .user-card {
+        background: rgba(59, 130, 246, 0.09);
+        border: 1px solid rgba(96, 165, 250, 0.28);
+      }
+
+      .ai-card {
+        background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(34, 211, 238, 0.06));
+        border: 1px solid rgba(167, 139, 250, 0.36);
+      }
+
+      /* The one summary-level score: a progress ring (SVG stroke-dasharray/
+         -dashoffset, the standard technique) filling proportionally to
+         score/5, with the number centered inside. This is the only score
+         anywhere in the flow — no per-question grading. */
+      .teardown-score-section {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 4px;
+        margin-bottom: 20px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+      }
+
+      .teardown-score-section[hidden] {
+        display: none;
+      }
+
+      .teardown-score-ring {
+        margin-bottom: 6px;
+      }
+
+      .teardown-score-ring-track {
+        fill: none;
+        stroke: rgba(255, 255, 255, 0.09);
+        stroke-width: 8;
+      }
+
+      .teardown-score-ring-fill {
+        fill: none;
+        stroke: url(#teardown-score-gradient);
+        stroke-width: 8;
+        stroke-linecap: round;
+        transform: rotate(-90deg);
+        transform-origin: 50% 50%;
+        transition: stroke-dashoffset 0.6s ease;
+      }
+
+      .teardown-score-value {
+        fill: #F5F7FB;
+        font-size: 24px;
+        font-weight: 700;
+      }
+
+      .teardown-score-tier {
+        font-size: 16px;
+        font-weight: 700;
+        color: #F5F7FB;
+      }
+
+      .teardown-score-note {
+        font-size: 12px;
+        color: #A7ADBC;
+        max-width: 380px;
+      }
+
+      .teardown-summary-checks {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 18px;
+      }
+
+      .teardown-summary-check {
+        width: 22px;
+        height: 22px;
+        border-radius: 999px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        color: #ffffff;
+        background: var(--accent-gradient);
       }
 
       .teardown-summary-block {
-        margin-bottom: 16px;
-        padding-bottom: 12px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+        margin-bottom: 18px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.10);
       }
 
       .teardown-summary-block:last-of-type {
         border-bottom: none;
       }
 
-      .teardown-summary-label {
-        font-size: 13px;
-        font-weight: 600;
-        margin-bottom: 6px;
+      .teardown-summary-question {
+        font-size: 17px;
+        font-weight: 700;
+        line-height: 1.3;
+        color: #F5F7FB;
+        margin-bottom: 10px;
       }
 
       #teardown-settings-view label {
         display: block;
         font-size: 12px;
-        color: rgba(245, 245, 245, 0.6);
+        color: #A7ADBC;
         margin-bottom: 4px;
       }
 
       .teardown-settings-status {
         margin-top: 6px;
         font-size: 11px;
-        color: rgba(245, 245, 245, 0.5);
+        color: #A7ADBC;
       }
     </style>
 
     <div id="teardown-card" class="teardown-card">
-      <button id="teardown-close-btn" class="teardown-close-btn" aria-label="Close">&times;</button>
+      <button id="teardown-close-btn" class="icon-button teardown-close-btn" aria-label="Close">&times;</button>
+
+      <div id="teardown-scroll" class="teardown-scroll">
       <h1 id="teardown-title" class="teardown-title">Teardown this product?</h1>
       <div id="teardown-status" class="teardown-status">Click Start Teardown to analyze this page.</div>
 
       <div id="teardown-main">
-        <div id="teardown-fallback-actions" class="teardown-fallback-actions" hidden>
-          <button id="teardown-fallback-yes" class="teardown-btn">Yes</button>
-          <button id="teardown-fallback-no" class="teardown-btn">No</button>
+        <div id="teardown-confirm-actions" class="teardown-confirm-actions" hidden>
+          <button id="teardown-confirm-yes" class="teardown-btn-block primary-button">Yes</button>
+          <button id="teardown-confirm-no" class="teardown-btn-block secondary-button">No</button>
         </div>
 
         <div id="teardown-loading" class="teardown-loading" hidden>
-          <div class="teardown-spinner"></div>
-          <div class="teardown-loading-text">Analyzing</div>
+          <div class="analysis-orb"><div class="analysis-orb-spin"></div></div>
+          <div id="teardown-loading-status" class="teardown-loading-text"></div>
         </div>
 
         <div id="teardown-flow" hidden>
+          <div id="teardown-progress" class="teardown-progress">
+            <div id="teardown-progress-label" class="teardown-progress-label"></div>
+            <div class="teardown-progress-row">
+              <div class="progress-track"></div>
+              <div class="progress-track"></div>
+              <div class="progress-track"></div>
+              <div class="progress-track"></div>
+              <div class="progress-track"></div>
+            </div>
+          </div>
+
+          <div id="teardown-microprompt" class="teardown-microprompt"></div>
+
           <div id="teardown-input-area">
             <input type="text" id="teardown-answer-input" class="teardown-input" placeholder="Type your answer…">
-            <button id="teardown-submit-btn" class="teardown-btn">Submit</button>
+            <button id="teardown-submit-btn" class="teardown-btn-block primary-button">Submit</button>
           </div>
 
           <div id="teardown-reveal-area" hidden>
-            <div class="teardown-answer-block">
-              <div class="teardown-answer-label">Your answer</div>
+            <div class="teardown-answer-card user-card">
+              <div class="teardown-answer-label">Your take</div>
               <div id="teardown-user-answer" class="teardown-answer-text"></div>
             </div>
-            <div class="teardown-answer-block">
+            <div class="teardown-answer-card ai-card">
               <div class="teardown-answer-label">The Read</div>
               <div id="teardown-read-answer" class="teardown-answer-text"></div>
             </div>
-            <button id="teardown-next-btn" class="teardown-btn" hidden>Next</button>
+            <button id="teardown-next-btn" class="teardown-btn-block primary-button" hidden>Next</button>
           </div>
         </div>
 
         <div id="teardown-summary" hidden>
+          <div id="teardown-score-section" class="teardown-score-section" hidden>
+            <svg id="teardown-score-ring" class="teardown-score-ring" width="88" height="88" viewBox="0 0 88 88">
+              <defs>
+                <linearGradient id="teardown-score-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#8B5CF6" />
+                  <stop offset="52%" stop-color="#6366F1" />
+                  <stop offset="100%" stop-color="#22D3EE" />
+                </linearGradient>
+              </defs>
+              <circle class="teardown-score-ring-track" cx="44" cy="44" r="38"></circle>
+              <circle id="teardown-score-ring-fill" class="teardown-score-ring-fill" cx="44" cy="44" r="38"></circle>
+              <text id="teardown-score-value" class="teardown-score-value" x="44" y="44" text-anchor="middle" dominant-baseline="central"></text>
+            </svg>
+            <div id="teardown-score-tier" class="teardown-score-tier"></div>
+            <div id="teardown-score-note" class="teardown-score-note"></div>
+          </div>
+
           <div id="teardown-summary-content"></div>
-          <button id="teardown-start-over-btn" class="teardown-btn">Teardown Another Page</button>
+          <button id="teardown-start-over-btn" class="teardown-btn-block primary-button">Teardown Another Page</button>
         </div>
 
-        <button id="teardown-start-btn" class="teardown-btn teardown-btn-primary">Start Teardown</button>
+        <button id="teardown-start-btn" class="teardown-btn-block primary-button">Start Teardown</button>
+
+        <button id="teardown-gear-btn" class="icon-button teardown-corner-btn" aria-label="Settings">&#9881;</button>
       </div>
 
       <div id="teardown-settings-view" hidden>
+        <div class="teardown-microprompt">Required to check pages and generate teardowns. Stored locally in your browser, only sent to Claude.</div>
         <label for="teardown-claude-key-input">Claude API key</label>
         <input type="password" id="teardown-claude-key-input" class="teardown-input" placeholder="sk-ant-...">
-        <button id="teardown-save-key-btn" class="teardown-btn">Save Key</button>
+        <button id="teardown-save-key-btn" class="teardown-btn-block primary-button">Save Key</button>
         <div id="teardown-settings-status" class="teardown-settings-status"></div>
-      </div>
 
-      <button id="teardown-gear-btn" class="teardown-corner-btn" aria-label="Settings">&#9881;</button>
-      <button id="teardown-home-btn" class="teardown-corner-btn" aria-label="Home" hidden>&#8962;</button>
+        <button id="teardown-home-btn" class="icon-button teardown-corner-btn" aria-label="Home">&#8962;</button>
+      </div>
+      </div>
     </div>
   `;
 
   const card = shadow.getElementById("teardown-card");
   const teardownTitle = shadow.getElementById("teardown-title");
   const statusEl = shadow.getElementById("teardown-status");
-  const fallbackActions = shadow.getElementById("teardown-fallback-actions");
-  const fallbackYesBtn = shadow.getElementById("teardown-fallback-yes");
-  const fallbackNoBtn = shadow.getElementById("teardown-fallback-no");
+  const confirmActions = shadow.getElementById("teardown-confirm-actions");
+  const confirmYesBtn = shadow.getElementById("teardown-confirm-yes");
+  const confirmNoBtn = shadow.getElementById("teardown-confirm-no");
   const startBtn = shadow.getElementById("teardown-start-btn");
   const closeBtn = shadow.getElementById("teardown-close-btn");
 
   const teardownMain = shadow.getElementById("teardown-main");
   const loadingEl = shadow.getElementById("teardown-loading");
+  const loadingStatusEl = shadow.getElementById("teardown-loading-status");
 
   const teardownFlow = shadow.getElementById("teardown-flow");
+  const progressLabel = shadow.getElementById("teardown-progress-label");
+  const progressSegments = Array.from(shadow.querySelectorAll(".teardown-progress-row .progress-track"));
+  const teardownMicroPrompt = shadow.getElementById("teardown-microprompt");
   const teardownInputArea = shadow.getElementById("teardown-input-area");
   const teardownAnswerInput = shadow.getElementById("teardown-answer-input");
   const teardownSubmitBtn = shadow.getElementById("teardown-submit-btn");
@@ -446,12 +624,26 @@
   const teardownSummaryContent = shadow.getElementById("teardown-summary-content");
   const startOverBtn = shadow.getElementById("teardown-start-over-btn");
 
+  const scoreSection = shadow.getElementById("teardown-score-section");
+  const scoreRingFill = shadow.getElementById("teardown-score-ring-fill");
+  const scoreValueEl = shadow.getElementById("teardown-score-value");
+  const scoreTierEl = shadow.getElementById("teardown-score-tier");
+  const scoreNoteEl = shadow.getElementById("teardown-score-note");
+
   const settingsView = shadow.getElementById("teardown-settings-view");
   const gearBtn = shadow.getElementById("teardown-gear-btn");
   const homeBtn = shadow.getElementById("teardown-home-btn");
   const claudeApiKeyInput = shadow.getElementById("teardown-claude-key-input");
   const saveTokenBtn = shadow.getElementById("teardown-save-key-btn");
   const settingsStatus = shadow.getElementById("teardown-settings-status");
+
+  // Central place to set the status line so error styling (red, per the
+  // design spec — "actual failures only, never normal states") never
+  // lingers onto an unrelated later message.
+  function setStatus(text, isError) {
+    statusEl.textContent = text;
+    statusEl.classList.toggle("teardown-status--error", !!isError);
+  }
 
   // Closing fully removes the overlay from the DOM (not just hides it) —
   // clicking the icon again builds a fresh one from scratch.
@@ -469,26 +661,32 @@
   // than snapshotted when settings opened — the 4-field call runs in the
   // background regardless of which screen is showing, so if it resolves
   // while settings is open, a stale snapshot would show the wrong title.
+  // currentAnalyzingTitle tracks the exact "Analyzing" / "Analyzing X"
+  // text so that round-trip doesn't lose the product name either.
+  let currentAnalyzingTitle = "Analyzing";
+
   function currentStepTitle() {
     if (!teardownSummary.hidden) {
-      return "Summary";
+      return "Teardown Summary";
     }
     if (!teardownFlow.hidden && teardownState) {
       return TEARDOWN_FIELDS[teardownState.currentIndex].question;
     }
     if (!loadingEl.hidden) {
-      return "Analyzing";
+      return currentAnalyzingTitle;
     }
     return "Teardown this product?";
   }
 
+  // gearBtn lives inside #teardown-main and homeBtn inside
+  // #teardown-settings-view now (see the markup above), so toggling each
+  // section's own hidden state already shows/hides its button — no need
+  // to toggle the buttons themselves separately.
   gearBtn.addEventListener("click", () => {
     console.log("Teardown: opening settings.");
     teardownTitle.textContent = "Settings";
     teardownMain.hidden = true;
     settingsView.hidden = false;
-    gearBtn.hidden = true;
-    homeBtn.hidden = false;
   });
 
   homeBtn.addEventListener("click", () => {
@@ -496,61 +694,115 @@
     teardownTitle.textContent = currentStepTitle();
     settingsView.hidden = true;
     teardownMain.hidden = false;
-    homeBtn.hidden = true;
-    gearBtn.hidden = false;
   });
 
   // One field at a time, in this order — matches the keys generateTeardown
-  // returns in background.js. summaryLabel is the field name shown on the
-  // review screen at the end; question is shown as the card's own title
-  // during the one-at-a-time flow (not a separate line under a generic
-  // title).
+  // returns in background.js. question is shown as the card's own title
+  // during the one-at-a-time flow AND as each summary card's heading;
+  // microPrompt is the smaller helper line shown just under the title to
+  // steer the user's own answer.
   const TEARDOWN_FIELDS = [
-    { key: "who", question: "Who is this built for?", summaryLabel: "Who it's for" },
-    { key: "job", question: "What job is this product hired to do?", summaryLabel: "The job" },
-    { key: "value", question: "Why does this beat the alternative?", summaryLabel: "The value prop" },
-    { key: "gap", question: "What's one gap or weak point?", summaryLabel: "The gap" }
+    {
+      key: "who",
+      question: "Who is this built for?",
+      microPrompt: "Be specific: role, context, situation, not just a segment."
+    },
+    {
+      key: "job",
+      question: "What job is this product hired to do?",
+      microPrompt: "What progress is the user trying to make?"
+    },
+    {
+      key: "value",
+      question: "Why does this beat the alternative?",
+      microPrompt: "Name the alternative and the real edge this has over it."
+    },
+    {
+      key: "gap",
+      question: "What's the biggest weak point here?",
+      microPrompt: "Be specific, not just \"pricing.\""
+    },
+    {
+      key: "metric",
+      question: "What metric would this product move?",
+      microPrompt: "Think activation, retention, revenue, whatever actually fits."
+    }
   ];
 
-  // Set by showFallbackPrompt(), read by the Yes button's handler.
-  let pendingFallbackDomain = null;
+  // Set by showConfirmPrompt(), read by the Yes button's handler. Always
+  // populated after GRAB_PAGE_CONTENT resolves, whether the soft check
+  // passed or not — the confirmation step is the same either way, just
+  // "Yes" does different things depending on isProductPage.
+  let pendingConfirmation = null;
 
   // All in-memory state for the write-then-reveal flow: which field we're
-  // on, Claude's four generated answers, and the user's own typed answers.
+  // on, Claude's five generated answers, and the user's own typed answers.
   // No persistence, this resets whenever the overlay is closed/reopened or
   // Start Over is clicked.
   let teardownState = null;
 
+  const ANALYZING_STATUS_LINES = [
+    "Reading the page",
+    "Mapping the core user and job",
+    "Identifying likely alternatives"
+  ];
+  let analyzingIntervalId = null;
+
+  function startAnalyzingRotation() {
+    let index = 0;
+    loadingStatusEl.textContent = ANALYZING_STATUS_LINES[0];
+    analyzingIntervalId = setInterval(() => {
+      index = (index + 1) % ANALYZING_STATUS_LINES.length;
+      loadingStatusEl.textContent = ANALYZING_STATUS_LINES[index];
+    }, 2000);
+  }
+
+  function stopAnalyzingRotation() {
+    if (analyzingIntervalId !== null) {
+      clearInterval(analyzingIntervalId);
+      analyzingIntervalId = null;
+    }
+  }
+
   // Shared "please wait" state: any request in flight (reading the page,
   // checking a fallback homepage, or generating the teardown) shows the
-  // same spinner + "Analyzing" title, no page-specific progress text —
-  // the user doesn't need to know which network call is running.
-  function showAnalyzing() {
-    fallbackActions.hidden = true;
+  // same orb + rotating status lines. productName, when known, personalizes
+  // the heading ("Analyzing Ninja Foodi Air Fryer" instead of the generic
+  // "Analyzing") — not known yet during the initial page read or the
+  // fallback-homepage check, only once a page has actually been confirmed.
+  function showAnalyzing(productName) {
+    confirmActions.hidden = true;
     startBtn.hidden = true;
     teardownFlow.hidden = true;
     teardownSummary.hidden = true;
     card.classList.remove("teardown-card--summary");
-    statusEl.textContent = "";
-    teardownTitle.textContent = "Analyzing";
+    setStatus("");
+    currentAnalyzingTitle = productName ? `Analyzing ${productName}` : "Analyzing";
+    teardownTitle.textContent = currentAnalyzingTitle;
     loadingEl.hidden = false;
+    startAnalyzingRotation();
   }
 
-  // Once the soft check passes, there's no separate confirmation step, this
-  // goes straight into calling generateTeardown (showing the loading state
-  // while that's in flight) and then the first field's question.
-  function startTeardownGeneration(pageText, hostname) {
-    showAnalyzing();
+  function hideAnalyzing() {
+    loadingEl.hidden = true;
+    stopAnalyzingRotation();
+  }
 
-    const message = { type: "GENERATE_TEARDOWN", pageText, hostname };
+  // Once the user confirms, this goes straight into calling
+  // generateTeardown (showing the loading state while that's in flight)
+  // and then the first field's question.
+  function startTeardownGeneration(pageText, hostname, productName) {
+    showAnalyzing(productName);
+
+    const message = { type: "GENERATE_TEARDOWN", pageText, hostname, productName };
     console.log("Sending GENERATE_TEARDOWN message", message);
 
     chrome.runtime.sendMessage(message, (response) => {
-      loadingEl.hidden = true;
+      hideAnalyzing();
 
       if (chrome.runtime.lastError) {
         teardownTitle.textContent = "Teardown this product?";
-        statusEl.textContent = `Error: ${chrome.runtime.lastError.message}`;
+        setStatus(`Error: ${chrome.runtime.lastError.message}`, true);
         startBtn.hidden = false;
         return;
       }
@@ -559,7 +811,7 @@
         const errMsg = response && response.error ? response.error : "Unknown error.";
         console.error("Teardown generation failed:", errMsg);
         teardownTitle.textContent = "Teardown this product?";
-        statusEl.textContent = `Error: ${errMsg}`;
+        setStatus(`Error: ${errMsg}`, true);
         startBtn.hidden = false;
         return;
       }
@@ -568,16 +820,20 @@
         who: response.who,
         job: response.job,
         value: response.value,
-        gap: response.gap
+        gap: response.gap,
+        metric: response.metric
       });
 
       teardownState = {
         currentIndex: 0,
+        productName,
+        hostname,
         generatedAnswers: {
           who: response.who,
           job: response.job,
           value: response.value,
-          gap: response.gap
+          gap: response.gap,
+          metric: response.metric
         },
         userAnswers: {}
       };
@@ -587,10 +843,19 @@
     });
   }
 
+  function updateProgress(currentIndex) {
+    progressLabel.textContent = `Question ${currentIndex + 1} of ${TEARDOWN_FIELDS.length}`;
+    progressSegments.forEach((segment, index) => {
+      segment.classList.toggle("progress-fill", index <= currentIndex);
+    });
+  }
+
   function renderCurrentTeardownField() {
     const field = TEARDOWN_FIELDS[teardownState.currentIndex];
     teardownTitle.textContent = field.question;
-    statusEl.textContent = "";
+    teardownMicroPrompt.textContent = field.microPrompt;
+    updateProgress(teardownState.currentIndex);
+    setStatus("");
     teardownAnswerInput.value = "";
     teardownInputArea.hidden = false;
     teardownRevealArea.hidden = true;
@@ -614,46 +879,123 @@
     teardownNextBtn.textContent = isLastField ? "View Summary" : "Next";
   }
 
-  // Review screen shown after the fourth field's reveal: all four fields
-  // stacked vertically, each with the user's own answer next to The Read.
-  // Not a new interaction, just a summary of what already happened. Gets
-  // a larger card (teardown-card--summary) since there's meaningfully more
-  // to read here than any single-field step.
+  // Progress-ring math: circumference is fixed (the radius never
+  // changes), so dasharray is set once here; only dashoffset moves per
+  // score, the standard stroke-dasharray/dashoffset ring technique.
+  const SCORE_RING_RADIUS = 38;
+  const SCORE_RING_CIRCUMFERENCE = 2 * Math.PI * SCORE_RING_RADIUS;
+  scoreRingFill.style.strokeDasharray = String(SCORE_RING_CIRCUMFERENCE);
+
+  function updateScoreRing(score) {
+    const clamped = Math.max(0, Math.min(5, score));
+    scoreRingFill.style.strokeDashoffset = String(SCORE_RING_CIRCUMFERENCE * (1 - clamped / 5));
+    scoreValueEl.textContent = clamped > 0 ? String(clamped) : "";
+  }
+
+  // The one summary-level score for the whole session (not per-question,
+  // no rubric) — sent as a follow-up call once all five of the user's own
+  // answers exist, since scoring them wouldn't make sense any earlier.
+  // Failure here just hides the score section rather than showing an
+  // error: it's a "cherry on top," not core functionality, and the five
+  // Q&A cards below are still fully useful without it.
+  function requestSessionScore() {
+    scoreSection.hidden = false;
+    updateScoreRing(0);
+    scoreTierEl.textContent = "Scoring…";
+    scoreNoteEl.textContent = "";
+
+    if (!isExtensionContextValid()) {
+      scoreSection.hidden = true;
+      return;
+    }
+
+    const answers = TEARDOWN_FIELDS.map((field) => ({
+      question: field.question,
+      userAnswer: teardownState.userAnswers[field.key],
+      aiAnswer: teardownState.generatedAnswers[field.key]
+    }));
+
+    const message = {
+      type: "GENERATE_SCORE",
+      answers,
+      hostname: teardownState.hostname,
+      productName: teardownState.productName
+    };
+    console.log("Sending GENERATE_SCORE message", message);
+
+    chrome.runtime.sendMessage(message, (response) => {
+      if (chrome.runtime.lastError) {
+        console.error("Score generation failed:", chrome.runtime.lastError.message);
+        scoreSection.hidden = true;
+        return;
+      }
+
+      if (!response || !response.ok) {
+        console.error("Score generation failed:", response && response.error);
+        scoreSection.hidden = true;
+        return;
+      }
+
+      console.log("Score generated:", response);
+      updateScoreRing(response.score);
+      scoreTierEl.textContent = response.tier;
+      scoreNoteEl.textContent = response.note;
+    });
+  }
+
+  // Review screen shown after the fifth field's reveal: the single
+  // overall score ring at the top, then a small 5/5 check row, then all
+  // five fields stacked vertically, each showing the question, "Your
+  // take" in user-card styling, and "The Read" in ai-card styling. Just a
+  // review of what already happened — no comparisons, insight cards, or
+  // animation beyond the one static check row. Gets a larger card
+  // (teardown-card--summary) since there's meaningfully more to read here
+  // than any single-field step.
   function renderSummary() {
     teardownSummaryContent.textContent = "";
+
+    const checkRow = document.createElement("div");
+    checkRow.className = "teardown-summary-checks";
+    TEARDOWN_FIELDS.forEach(() => {
+      const check = document.createElement("div");
+      check.className = "teardown-summary-check";
+      check.textContent = "✓";
+      checkRow.appendChild(check);
+    });
+    teardownSummaryContent.appendChild(checkRow);
 
     TEARDOWN_FIELDS.forEach((field) => {
       const block = document.createElement("div");
       block.className = "teardown-summary-block";
 
-      const labelEl = document.createElement("div");
-      labelEl.className = "teardown-summary-label";
-      labelEl.textContent = field.summaryLabel;
-      block.appendChild(labelEl);
+      const questionEl = document.createElement("div");
+      questionEl.className = "teardown-summary-question";
+      questionEl.textContent = field.question;
+      block.appendChild(questionEl);
 
-      const userBlock = document.createElement("div");
-      userBlock.className = "teardown-answer-block";
+      const userCard = document.createElement("div");
+      userCard.className = "teardown-answer-card user-card";
       const userLabel = document.createElement("div");
       userLabel.className = "teardown-answer-label";
-      userLabel.textContent = "Your answer";
+      userLabel.textContent = "Your take";
       const userText = document.createElement("div");
       userText.className = "teardown-answer-text";
       userText.textContent = teardownState.userAnswers[field.key] || "(no answer given)";
-      userBlock.appendChild(userLabel);
-      userBlock.appendChild(userText);
-      block.appendChild(userBlock);
+      userCard.appendChild(userLabel);
+      userCard.appendChild(userText);
+      block.appendChild(userCard);
 
-      const readBlock = document.createElement("div");
-      readBlock.className = "teardown-answer-block";
+      const aiCard = document.createElement("div");
+      aiCard.className = "teardown-answer-card ai-card";
       const readLabel = document.createElement("div");
       readLabel.className = "teardown-answer-label";
       readLabel.textContent = "The Read";
       const readText = document.createElement("div");
       readText.className = "teardown-answer-text";
       readText.textContent = teardownState.generatedAnswers[field.key];
-      readBlock.appendChild(readLabel);
-      readBlock.appendChild(readText);
-      block.appendChild(readBlock);
+      aiCard.appendChild(readLabel);
+      aiCard.appendChild(readText);
+      block.appendChild(aiCard);
 
       teardownSummaryContent.appendChild(block);
     });
@@ -661,8 +1003,14 @@
     teardownFlow.hidden = true;
     teardownSummary.hidden = false;
     card.classList.add("teardown-card--summary");
-    teardownTitle.textContent = "Summary";
-    statusEl.textContent = "";
+    teardownTitle.textContent = "Teardown Summary";
+    // .teardown-status is already the "smaller line under the title"
+    // pattern used everywhere else in the overlay — reused here to name
+    // the product, falling back to the hostname if no name was ever
+    // resolved for this run.
+    setStatus(teardownState.productName || teardownState.hostname || "");
+
+    requestSessionScore();
   }
 
   // Fully resets the overlay's in-memory state back to the initial screen,
@@ -671,11 +1019,12 @@
     console.log("Start Over clicked, resetting state");
 
     teardownState = null;
-    pendingFallbackDomain = null;
+    pendingConfirmation = null;
 
-    fallbackActions.hidden = true;
-    loadingEl.hidden = true;
+    confirmActions.hidden = true;
+    hideAnalyzing();
     teardownFlow.hidden = true;
+    teardownMicroPrompt.textContent = "";
     teardownInputArea.hidden = false;
     teardownRevealArea.hidden = true;
     teardownAnswerInput.value = "";
@@ -686,10 +1035,14 @@
     teardownSummary.hidden = true;
     teardownSummaryContent.textContent = "";
     card.classList.remove("teardown-card--summary");
+    scoreSection.hidden = true;
+    updateScoreRing(0);
+    scoreTierEl.textContent = "";
+    scoreNoteEl.textContent = "";
 
     startBtn.hidden = false;
     teardownTitle.textContent = "Teardown this product?";
-    statusEl.textContent = "Click Start Teardown to analyze this page.";
+    setStatus("Click Start Teardown to analyze this page.");
   }
 
   teardownSubmitBtn.addEventListener("click", submitCurrentTeardownField);
@@ -722,21 +1075,78 @@
     return typeof chrome !== "undefined" && !!chrome.runtime && !!chrome.runtime.id;
   }
 
-  function showFallbackPrompt(domain) {
-    pendingFallbackDomain = domain;
-    console.log("pendingFallbackDomain set to:", pendingFallbackDomain);
-    loadingEl.hidden = true;
+  function truncateText(text, maxLength) {
+    if (!text) {
+      return text;
+    }
+    const trimmed = text.trim();
+    return trimmed.length > maxLength ? `${trimmed.slice(0, maxLength - 1).trimEnd()}…` : trimmed;
+  }
+
+  // Raw <title> text (especially on e-commerce sites) tends to run
+  // "Product Name | marketing copy" or "Product Name, spec, spec : Site
+  // Name" — the lead segment before the first strong separator is usually
+  // the actual product name. Only used as a fallback when Claude's own
+  // extracted productName isn't available.
+  function cleanProductTitleFromRawTitle(rawTitle) {
+    if (!rawTitle) {
+      return null;
+    }
+    const leadSegment = rawTitle.split(/[|:]/)[0].trim();
+    return truncateText(leadSegment || rawTitle, 60);
+  }
+
+  // Prefer Claude's own extracted name (from the soft check) since it's
+  // already the real product/company name, not raw SEO-stuffed title text.
+  // No name is available at all for the not-yet-fetched fallback-domain
+  // case — that falls through to the generic phrasing in showConfirmPrompt.
+  function resolveDisplayName(confirmation) {
+    if (!confirmation.isProductPage) {
+      return null;
+    }
+    if (confirmation.productName && confirmation.productName.trim()) {
+      return truncateText(confirmation.productName, 60);
+    }
+    return cleanProductTitleFromRawTitle(confirmation.pageTitle);
+  }
+
+  // Always the second step after Start Teardown, whether the soft check
+  // passed or not. A confirmed page with a known name gets the "We found
+  // X" framing with name-specific buttons; anything without a clear name
+  // (no name extracted despite being a product page, or the "try this
+  // domain instead" fallback offer, which has no page-specific identity
+  // yet) falls back to the plain generic phrasing.
+  function showConfirmPrompt(confirmation) {
+    pendingConfirmation = confirmation;
+    console.log("pendingConfirmation set to:", pendingConfirmation);
+    hideAnalyzing();
     teardownTitle.textContent = "Teardown this product?";
-    statusEl.textContent = `This doesn't look like a product or company page. Want to teardown ${domain} instead?`;
+
+    const displayName = resolveDisplayName(confirmation);
+
+    // "Not right now" reads as a plain decline (I don't want to do this
+    // right now), not an instruction to go find a different page —
+    // "Choose another page" implied the latter, which isn't what this
+    // button actually does. Same wording in both branches for consistency.
+    if (displayName) {
+      setStatus(`We found ${displayName} on this page. Tear it down?`);
+      confirmYesBtn.textContent = `Tear down ${displayName}`;
+      confirmNoBtn.textContent = "Not right now";
+    } else {
+      setStatus(`Would you like to teardown ${confirmation.rootDomain}?`);
+      confirmYesBtn.textContent = "Yes";
+      confirmNoBtn.textContent = "Not right now";
+    }
+
     startBtn.hidden = true;
-    fallbackActions.hidden = false;
+    confirmActions.hidden = false;
   }
 
   startBtn.addEventListener("click", () => {
     console.log("Start Teardown clicked");
 
     if (!isExtensionContextValid()) {
-      statusEl.textContent = "This overlay is out of date — refresh the page and click the icon again.";
+      setStatus("This overlay is out of date — refresh the page and click the icon again.", true);
       return;
     }
 
@@ -751,18 +1161,18 @@
       console.log("Sending message to background.js", message);
       chrome.runtime.sendMessage(message, (response) => {
         if (chrome.runtime.lastError) {
-          loadingEl.hidden = true;
+          hideAnalyzing();
           teardownTitle.textContent = "Teardown this product?";
-          statusEl.textContent = `Error: ${chrome.runtime.lastError.message}`;
+          setStatus(`Error: ${chrome.runtime.lastError.message}`, true);
           startBtn.hidden = false;
           return;
         }
 
         if (!response || !response.ok) {
           const errMsg = response && response.error ? response.error : "Unknown error.";
-          loadingEl.hidden = true;
+          hideAnalyzing();
           teardownTitle.textContent = "Teardown this product?";
-          statusEl.textContent = `Error: ${errMsg}`;
+          setStatus(`Error: ${errMsg}`, true);
           startBtn.hidden = false;
           return;
         }
@@ -772,36 +1182,54 @@
         console.log("GRAB_PAGE_CONTENT response received", response);
         console.log("response.rootDomain:", response.rootDomain);
 
-        if (response.isProductPage) {
-          startTeardownGeneration(response.pageText, response.hostname);
-        } else {
-          showFallbackPrompt(response.rootDomain);
-        }
+        showConfirmPrompt({
+          isProductPage: response.isProductPage,
+          productName: response.productName,
+          pageText: response.pageText,
+          pageTitle: response.pageTitle,
+          hostname: response.hostname,
+          rootDomain: response.rootDomain
+        });
       });
     } catch (error) {
       console.error("Error sending message:", error);
     }
   });
 
-  fallbackYesBtn.addEventListener("click", () => {
-    const domain = pendingFallbackDomain;
-    console.log("Homepage fallback accepted for domain:", domain);
+  confirmYesBtn.addEventListener("click", () => {
+    const confirmation = pendingConfirmation;
+    console.log("Teardown confirmed:", confirmation);
 
     if (!isExtensionContextValid()) {
-      statusEl.textContent = "This overlay is out of date — refresh the page and click the icon again.";
+      setStatus("This overlay is out of date — refresh the page and click the icon again.", true);
       return;
     }
 
+    if (!confirmation) {
+      // Shouldn't happen, but don't leave the user stuck if it does.
+      resetToInitialState();
+      return;
+    }
+
+    if (confirmation.isProductPage) {
+      // Already have this page's content from GRAB_PAGE_CONTENT — no need
+      // to fetch anything else, straight into generation.
+      startTeardownGeneration(confirmation.pageText, confirmation.hostname, resolveDisplayName(confirmation));
+      return;
+    }
+
+    // The soft check said no on the current page, so "yes" here means
+    // fetch that domain's actual homepage and try again there instead.
     showAnalyzing();
 
-    const message = { type: "CHECK_HOMEPAGE_FALLBACK", domain };
+    const message = { type: "CHECK_HOMEPAGE_FALLBACK", domain: confirmation.rootDomain };
     console.log("Sending CHECK_HOMEPAGE_FALLBACK message", message);
 
     chrome.runtime.sendMessage(message, (response) => {
       if (chrome.runtime.lastError) {
-        loadingEl.hidden = true;
+        hideAnalyzing();
         teardownTitle.textContent = "Teardown this product?";
-        statusEl.textContent = `Error: ${chrome.runtime.lastError.message}`;
+        setStatus(`Error: ${chrome.runtime.lastError.message}`, true);
         startBtn.hidden = false;
         return;
       }
@@ -809,9 +1237,9 @@
       if (!response || !response.ok) {
         const errMsg = response && response.error ? response.error : "Unknown error.";
         console.error("Homepage fallback check failed:", errMsg);
-        loadingEl.hidden = true;
+        hideAnalyzing();
         teardownTitle.textContent = "Teardown this product?";
-        statusEl.textContent = "Couldn't find a clear product page here.";
+        setStatus("Couldn't find a clear product page here.", true);
         startBtn.hidden = false;
         return;
       }
@@ -819,22 +1247,24 @@
       console.log("Homepage fallback content received", response);
 
       if (response.isProductPage) {
-        startTeardownGeneration(response.pageText, response.hostname);
+        startTeardownGeneration(response.pageText, response.hostname, response.productName);
       } else {
         // No further fallback attempts — stop here.
-        loadingEl.hidden = true;
+        hideAnalyzing();
         teardownTitle.textContent = "Teardown this product?";
-        statusEl.textContent = "Couldn't find a clear product page here.";
+        setStatus("Couldn't find a clear product page here.", true);
         startBtn.hidden = false;
       }
     });
   });
 
-  fallbackNoBtn.addEventListener("click", () => {
-    console.log("Homepage fallback declined");
-    fallbackActions.hidden = true;
+  confirmNoBtn.addEventListener("click", () => {
+    console.log("Teardown declined");
+    pendingConfirmation = null;
+    confirmActions.hidden = true;
     startBtn.hidden = false;
-    // Ending here is intentional — same as closing the overlay, no further action.
+    teardownTitle.textContent = "Teardown this product?";
+    setStatus("Click Start Teardown to analyze this page.");
   });
 
   // Pre-fill the input with whatever key is already stored, if any.

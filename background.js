@@ -27,17 +27,49 @@ function extractTextFromClaudeContent(content) {
   return textBlock ? textBlock.text : null;
 }
 
-// Does this page's text describe a specific product or company?
-// Calls the Claude API — same key we'll use for the 4-field call later,
-// so there's only one key for the user to manage.
-// Defaults to true (proceed) on any failure so a flaky/missing key never
-// blocks the user; errors are logged, not surfaced.
+// Parses the soft check's response text into { isProductPage, productName }.
+// Expects a strict "YES: Name" / "NO" first line, but falls back to a loose
+// substring check (the old behavior) if Claude doesn't follow that format —
+// in that fallback path there's no name to extract, just the verdict.
+// Returns null if genuinely unparseable either way.
+function parseSoftCheckResponse(text) {
+  const trimmed = text.trim();
+  const firstLine = trimmed.split("\n")[0].trim();
+  const upperFirstLine = firstLine.toUpperCase();
+
+  if (upperFirstLine.startsWith("YES")) {
+    const colonIndex = firstLine.indexOf(":");
+    const productName = colonIndex !== -1 ? firstLine.slice(colonIndex + 1).trim() : "";
+    return { isProductPage: true, productName: productName || null };
+  }
+
+  if (upperFirstLine.startsWith("NO")) {
+    return { isProductPage: false, productName: null };
+  }
+
+  const upperWhole = trimmed.toUpperCase();
+  if (upperWhole.includes("YES")) {
+    return { isProductPage: true, productName: null };
+  }
+  if (upperWhole.includes("NO")) {
+    return { isProductPage: false, productName: null };
+  }
+
+  return null;
+}
+
+// Does this page's text describe a specific product or company, and if so,
+// what's it actually called? Calls the Claude API — same key we'll use for
+// the 4-field call later, so there's only one key for the user to manage.
+// Defaults to { isProductPage: true, productName: null } on any failure so
+// a flaky/missing key never blocks the user; errors are logged, not
+// surfaced.
 async function checkIsProductPage(pageText) {
   try {
     const { claudeApiKey } = await chrome.storage.local.get("claudeApiKey");
     if (!claudeApiKey) {
       console.warn("Teardown: no claudeApiKey set, skipping soft check.");
-      return true;
+      return { isProductPage: true, productName: null };
     }
 
     const controller = new AbortController();
@@ -62,14 +94,29 @@ async function checkIsProductPage(pageText) {
         },
         body: JSON.stringify({
           model: CLAUDE_SOFT_CHECK_MODEL,
-          max_tokens: 5,
+          // 5 tokens was too tight for a bare word: if Claude led with any
+          // preamble (seen in practice: echoing a page's own tagline like
+          // "AI-powered answer engine"), the budget ran out before it ever
+          // reached YES/NO. More headroom here since we're now also asking
+          // for a name, plus a stricter instruction, so it reliably lands
+          // on the required format even if it wants to hedge first.
+          max_tokens: 20,
           messages: [
             {
               role: "user",
               content:
                 "Does the following page content describe a specific product or " +
                 "company (e.g. a product listing, a company homepage, a SaaS " +
-                "product page)? Answer with only the single word YES or NO.\n\n" +
+                "product page)?\n\n" +
+                "Respond on a single line in exactly this format, nothing else:\n" +
+                "YES: <the actual product or company name>\n" +
+                "or\n" +
+                "NO\n\n" +
+                "Use the real product or company name as it appears on the page " +
+                '(e.g. "Ninja Foodi Air Fryer" or "Notion"), not a generic ' +
+                "description. If it's a product/company page but no clear name is " +
+                "identifiable, respond \"YES:\" with nothing after the colon. Do " +
+                "not add any other text, punctuation, or explanation.\n\n" +
                 promptPageText
             }
           ]
@@ -93,20 +140,15 @@ async function checkIsProductPage(pageText) {
     }
     console.log("Claude raw text response:", text);
 
-    const normalized = text.trim().toUpperCase();
-    let parsedResult;
-    if (normalized.includes("YES")) {
-      parsedResult = true;
-    } else if (normalized.includes("NO")) {
-      parsedResult = false;
-    } else {
+    const parsed = parseSoftCheckResponse(text);
+    if (!parsed) {
       throw new Error(`Could not parse YES/NO from Claude response: "${text}"`);
     }
-    console.log("Parsed result (true/false):", parsedResult);
-    return parsedResult;
+    console.log("Parsed soft check result:", parsed);
+    return parsed;
   } catch (err) {
     console.error("Teardown: soft check failed, defaulting to proceed.", err);
-    return true;
+    return { isProductPage: true, productName: null };
   }
 }
 
@@ -120,13 +162,13 @@ function stripCodeFence(text) {
 }
 
 // The core value of the extension: given a product/company page's content,
-// produce the four-field teardown (who / job / value / gap). Only meant to
-// be called once checkIsProductPage has already said true.
-// Returns { ok: true, who, job, value, gap } on success, or
+// produce the five-field teardown (who / job / value / gap / metric). Only
+// meant to be called once checkIsProductPage has already said true.
+// Returns { ok: true, who, job, value, gap, metric } on success, or
 // { ok: false, error } on any failure — unlike the soft check, there's no
 // sensible default to fall back to here, so failures are surfaced rather
 // than silently proceeding.
-async function generateTeardown(pageText, hostname) {
+async function generateTeardown(pageText, hostname, productName) {
   try {
     const { claudeApiKey } = await chrome.storage.local.get("claudeApiKey");
     if (!claudeApiKey) {
@@ -134,34 +176,38 @@ async function generateTeardown(pageText, hostname) {
       return { ok: false, error: "No Claude API key set." };
     }
 
+    // Each field's instructions mirror the exact title + micro-prompt shown
+    // to the user in the overlay, so what Claude is asked to produce lines
+    // up with what the user was just asked to answer themselves.
     const prompt =
       "You are analyzing a product or company page to produce a sharp, specific teardown.\n\n" +
       "Given the page content below, return ONLY a JSON object. No preamble, no " +
       "markdown code fences, no explanation before or after it. Use exactly these " +
-      "four fields:\n\n" +
-      '{"who": "...", "job": "...", "value": "...", "gap": "..."}\n\n' +
-      "- who: the specific type of user this product is clearly built for. Be " +
-      'concrete (a role, a use case, a kind of buyer), not "everyone" or ' +
-      '"businesses."\n' +
-      "- job: the one job this user is \"hiring\" this product to do, framed as " +
-      "Jobs-to-be-Done, a single clear sentence describing the outcome they want, " +
-      "not a list of features.\n" +
-      "- value: why this product is worth choosing over doing nothing or solving " +
-      "the problem another way. Ground this in something specific from the page, " +
-      "not a generic value proposition.\n" +
-      "- gap: one specific thing that's missing, weak, unclear, or worth " +
-      "questioning about this product, based on what is (or isn't) said on the " +
-      "page.\n\n" +
+      "five fields:\n\n" +
+      '{"who": "...", "job": "...", "value": "...", "gap": "...", "metric": "..."}\n\n' +
+      '- who (primary user): "Who is this built for?" Be specific: role, ' +
+      "context, situation, not just a segment.\n" +
+      '- job (core job-to-be-done): "What job is this product hired to do?" ' +
+      "What progress is the user trying to make? A single clear sentence, not " +
+      "a list of features.\n" +
+      '- value (differentiation): "Why does this beat the alternative?" Name ' +
+      "the alternative and the real edge this has over it, grounded in " +
+      "something specific from the page.\n" +
+      '- gap: "What\'s the biggest weak point here?" Be specific, not just ' +
+      '"pricing."\n' +
+      '- metric: "What metric would this product move?" Think activation, ' +
+      "retention, revenue, whatever actually fits.\n\n" +
       "Avoid vague, one-size-fits-all language in every field. Ground each answer " +
       "in specific details actually present in the page content, such as names, " +
       "numbers, claims, features, or wording, rather than generic industry " +
       "statements that could apply to any competitor.\n\n" +
-      "Never use em dashes in any of the four answers. Use periods, commas, or " +
+      "Never use em dashes in any of the five answers. Use periods, commas, or " +
       "separate sentences instead.\n\n" +
       "Every answer must use proper punctuation and capitalization: start with a " +
       "capital letter, capitalize proper nouns and the product's own name " +
       "correctly, and end with a period (or a question mark if it's phrased as a " +
       "question).\n\n" +
+      (productName ? `Product name: ${productName}\n\n` : "") +
       `Hostname: ${hostname}\n\n` +
       "Page content:\n" +
       pageText;
@@ -214,16 +260,143 @@ async function generateTeardown(pageText, hostname) {
       return { ok: false, error: "Claude did not return valid JSON." };
     }
 
-    const { who, job, value, gap } = parsed || {};
-    if (![who, job, value, gap].every((field) => typeof field === "string" && field.trim())) {
+    const { who, job, value, gap, metric } = parsed || {};
+    if (![who, job, value, gap, metric].every((field) => typeof field === "string" && field.trim())) {
       console.error("Teardown: parsed JSON is missing one or more fields. Raw response:", text);
       return { ok: false, error: "Claude's response was missing one or more fields." };
     }
 
-    console.log("Parsed teardown:", { who, job, value, gap });
-    return { ok: true, who, job, value, gap };
+    console.log("Parsed teardown:", { who, job, value, gap, metric });
+    return { ok: true, who, job, value, gap, metric };
   } catch (err) {
     console.error("Teardown: generateTeardown failed.", err);
+    return { ok: false, error: err.message || String(err) };
+  }
+}
+
+const SCORE_TIMEOUT_MS = 20000;
+
+// Fixed score -> label mapping. Derived here rather than trusted from
+// Claude's own wording (even though the prompt below also asks it to
+// state one, for context) so the tier shown next to the ring can never
+// mismatch the numeric score — a deterministic lookup can't drift the way
+// free-form model output occasionally could.
+const SCORE_TIERS = { 1: "Vague", 2: "Broad", 3: "Developing", 4: "Solid", 5: "Sharp" };
+
+// The one summary-level score for the whole session: how specific and
+// grounded the user's own five answers were, not how closely they matched
+// Claude's reference answers. Only meant to be called once all five
+// fields have been answered. Returns { ok: true, score, tier, note } on
+// success, or { ok: false, error } on failure — same "surface it, don't
+// silently proceed" approach as generateTeardown, since there's no
+// sensible default score to fall back to.
+async function generateScore(answers, hostname, productName) {
+  try {
+    const { claudeApiKey } = await chrome.storage.local.get("claudeApiKey");
+    if (!claudeApiKey) {
+      console.warn("Teardown: no claudeApiKey set, cannot generate score.");
+      return { ok: false, error: "No Claude API key set." };
+    }
+
+    const answersBlock = answers
+      .map((answer, index) => {
+        const userAnswer = answer.userAnswer && answer.userAnswer.trim() ? answer.userAnswer : "(no answer given)";
+        return `${index + 1}. ${answer.question}\nUser's answer: ${userAnswer}\nReference answer: ${answer.aiAnswer}`;
+      })
+      .join("\n\n");
+
+    const prompt =
+      "You are scoring how specific and grounded a user's OWN answers were during a " +
+      "product teardown exercise, not how closely they match the reference answers " +
+      "below. A user's answer can be excellent even if worded very differently from " +
+      "the reference.\n\n" +
+      "Judge whether the user named a real, specific role or context instead of " +
+      '"everyone," a real specific alternative instead of vague fluff, a concrete ' +
+      "gap instead of a generic complaint, and so on, across all five answers as a " +
+      "whole.\n\n" +
+      "Here are the five question and answer pairs from this session:\n\n" +
+      answersBlock +
+      "\n\n" +
+      "Return ONLY a JSON object. No preamble, no markdown code fences, no " +
+      "explanation before or after it. Use exactly these two fields:\n\n" +
+      '{"score": <integer from 1 to 5>, "note": "..."}\n\n' +
+      "- score: an integer from 1 to 5 judging the specificity and groundedness of " +
+      "the user's five answers overall.\n" +
+      "- note: one short sentence explaining the score in plain language, " +
+      "referencing what actually happened in this session (which answers were " +
+      "specific, which could have gone further), not a generic statement that " +
+      "could apply to any session.\n\n" +
+      "Never use em dashes. Use periods, commas, or separate sentences instead. Use " +
+      "proper punctuation and capitalization, and end with a period.\n\n" +
+      (productName ? `Product name: ${productName}\n` : "") +
+      `Hostname: ${hostname}\n`;
+
+    console.log("Final prompt being sent to Claude for scoring:", prompt);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), SCORE_TIMEOUT_MS);
+
+    let response;
+    try {
+      console.log("Calling Claude API for session score");
+      response = await fetch(CLAUDE_API_URL, {
+        method: "POST",
+        headers: {
+          "x-api-key": claudeApiKey,
+          "anthropic-version": CLAUDE_API_VERSION,
+          "anthropic-dangerous-direct-browser-access": "true",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: CLAUDE_TEARDOWN_MODEL,
+          max_tokens: 200,
+          messages: [{ role: "user", content: prompt }]
+        }),
+        signal: controller.signal
+      });
+      console.log("Claude API fetch resolved, status:", response.status);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    if (!response.ok) {
+      throw new Error(`Claude API returned ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log("Claude API raw result:", result);
+    const text = extractTextFromClaudeContent(result && result.content);
+    if (typeof text !== "string") {
+      throw new Error("Unexpected Claude API response shape.");
+    }
+    console.log("Claude raw text response:", text);
+
+    let parsed;
+    try {
+      parsed = JSON.parse(stripCodeFence(text));
+    } catch (parseErr) {
+      console.error("Teardown: could not parse JSON from Claude score response. Raw response:", text);
+      return { ok: false, error: "Claude did not return valid JSON." };
+    }
+
+    const score = Number.isInteger(parsed && parsed.score) ? parsed.score : null;
+    if (!score || score < 1 || score > 5) {
+      console.error("Teardown: invalid score in Claude response. Raw response:", text);
+      return { ok: false, error: "Claude returned an invalid score." };
+    }
+
+    const note = parsed && typeof parsed.note === "string" ? parsed.note.trim() : "";
+    if (!note) {
+      console.error("Teardown: missing note in Claude score response. Raw response:", text);
+      return { ok: false, error: "Claude's response was missing a note." };
+    }
+
+    const tier = SCORE_TIERS[score];
+
+    console.log("Parsed score:", { score, tier, note });
+    return { ok: true, score, tier, note };
+  } catch (err) {
+    console.error("Teardown: generateScore failed.", err);
     return { ok: false, error: err.message || String(err) };
   }
 }
@@ -420,6 +593,7 @@ function grabPageContent() {
 
   return {
     pageText,
+    pageTitle: title,
     hostname: window.location.hostname
   };
 }
@@ -464,12 +638,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // Note: short/empty pageText is passed through as-is on purpose —
         // "not enough content" handling is a later step, not here.
         console.log("Starting product page check");
-        const isProductPage = await checkIsProductPage(data.pageText);
+        const { isProductPage, productName } = await checkIsProductPage(data.pageText);
 
         sendResponse({
           ok: true,
           isProductPage,
+          productName,
           pageText: data.pageText,
+          pageTitle: data.pageTitle,
           hostname: data.hostname,
           rootDomain: getRootDomain(data.hostname)
         });
@@ -513,11 +689,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const pageText = await fetchHomepageContent(domain);
 
         console.log("Starting product page check (homepage fallback)");
-        const isProductPage = await checkIsProductPage(pageText);
+        const { isProductPage, productName } = await checkIsProductPage(pageText);
 
         sendResponse({
           ok: true,
           isProductPage,
+          productName,
           pageText,
           hostname: domain
         });
@@ -533,17 +710,38 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "GENERATE_TEARDOWN") {
     (async () => {
       try {
-        const { pageText, hostname } = message;
+        const { pageText, hostname, productName } = message;
         if (!pageText || !hostname) {
           sendResponse({ ok: false, error: "Missing pageText or hostname for teardown generation." });
           return;
         }
 
         console.log("Starting teardown generation for:", hostname);
-        const teardown = await generateTeardown(pageText, hostname);
+        const teardown = await generateTeardown(pageText, hostname, productName);
         sendResponse(teardown);
       } catch (err) {
         console.error("Teardown: GENERATE_TEARDOWN handler failed.", err);
+        sendResponse({ ok: false, error: err.message || String(err) });
+      }
+    })();
+
+    return true; // keep the message channel open for the async sendResponse
+  }
+
+  if (message.type === "GENERATE_SCORE") {
+    (async () => {
+      try {
+        const { answers, hostname, productName } = message;
+        if (!Array.isArray(answers) || answers.length === 0 || !hostname) {
+          sendResponse({ ok: false, error: "Missing answers or hostname for scoring." });
+          return;
+        }
+
+        console.log("Starting score generation for:", hostname);
+        const scoreResult = await generateScore(answers, hostname, productName);
+        sendResponse(scoreResult);
+      } catch (err) {
+        console.error("Teardown: GENERATE_SCORE handler failed.", err);
         sendResponse({ ok: false, error: err.message || String(err) });
       }
     })();
