@@ -2,14 +2,30 @@
 // Owns: injecting the page-read script on demand (triggered by popup.js,
 // since a default_popup means chrome.action.onClicked never fires),
 // the soft check via Claude (below), the homepage fallback fetch (below),
-// and the Claude 4-field call (later).
+// and the Claude 4-field teardown call (below).
 
 const CLAUDE_API_URL = "https://api.anthropic.com/v1/messages";
 const CLAUDE_API_VERSION = "2023-06-01";
 // Small/fast model — this is a one-word yes/no classification, not the
 // deep 4-field analysis, so we don't need a heavyweight model here.
 const CLAUDE_SOFT_CHECK_MODEL = "claude-haiku-4-5-20251001";
+// This is the actual product of the extension — sharp, specific, grounded
+// answers, not a quick classification — so it gets the more capable model.
+const CLAUDE_TEARDOWN_MODEL = "claude-sonnet-5";
 const CLAUDE_TIMEOUT_MS = 10000;
+
+// Pulls the actual text answer out of a Claude API response's content
+// array. Newer models can put a "thinking" block (or other non-text block
+// types) before the "text" block, so this scans for the first block that
+// actually has type "text" instead of assuming content[0] is it. Returns
+// null if no text block is present at all.
+function extractTextFromClaudeContent(content) {
+  if (!Array.isArray(content)) {
+    return null;
+  }
+  const textBlock = content.find((block) => block && block.type === "text" && typeof block.text === "string");
+  return textBlock ? textBlock.text : null;
+}
 
 // Does this page's text describe a specific product or company?
 // Calls the Claude API — same key we'll use for the 4-field call later,
@@ -71,7 +87,7 @@ async function checkIsProductPage(pageText) {
 
     const result = await response.json();
     console.log("Claude API raw result:", result);
-    const text = result && result.content && result.content[0] && result.content[0].text;
+    const text = extractTextFromClaudeContent(result && result.content);
     if (typeof text !== "string") {
       throw new Error("Unexpected Claude API response shape.");
     }
@@ -91,6 +107,124 @@ async function checkIsProductPage(pageText) {
   } catch (err) {
     console.error("Teardown: soft check failed, defaulting to proceed.", err);
     return true;
+  }
+}
+
+const TEARDOWN_TIMEOUT_MS = 30000;
+
+// Strips a ```json ... ``` or ``` ... ``` fence if Claude wraps its answer
+// in one despite being told not to. Returns the input unchanged otherwise.
+function stripCodeFence(text) {
+  const fenced = text.trim().match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return fenced ? fenced[1] : text;
+}
+
+// The core value of the extension: given a product/company page's content,
+// produce the four-field teardown (who / job / value / gap). Only meant to
+// be called once checkIsProductPage has already said true.
+// Returns { ok: true, who, job, value, gap } on success, or
+// { ok: false, error } on any failure — unlike the soft check, there's no
+// sensible default to fall back to here, so failures are surfaced rather
+// than silently proceeding.
+async function generateTeardown(pageText, hostname) {
+  try {
+    const { claudeApiKey } = await chrome.storage.local.get("claudeApiKey");
+    if (!claudeApiKey) {
+      console.warn("Teardown: no claudeApiKey set, cannot generate teardown.");
+      return { ok: false, error: "No Claude API key set." };
+    }
+
+    const prompt =
+      "You are analyzing a product or company page to produce a sharp, specific teardown.\n\n" +
+      "Given the page content below, return ONLY a JSON object. No preamble, no " +
+      "markdown code fences, no explanation before or after it. Use exactly these " +
+      "four fields:\n\n" +
+      '{"who": "...", "job": "...", "value": "...", "gap": "..."}\n\n' +
+      "- who: the specific type of user this product is clearly built for. Be " +
+      'concrete (a role, a use case, a kind of buyer), not "everyone" or ' +
+      '"businesses."\n' +
+      "- job: the one job this user is \"hiring\" this product to do, framed as " +
+      "Jobs-to-be-Done, a single clear sentence describing the outcome they want, " +
+      "not a list of features.\n" +
+      "- value: why this product is worth choosing over doing nothing or solving " +
+      "the problem another way. Ground this in something specific from the page, " +
+      "not a generic value proposition.\n" +
+      "- gap: one specific thing that's missing, weak, unclear, or worth " +
+      "questioning about this product, based on what is (or isn't) said on the " +
+      "page.\n\n" +
+      "Avoid vague, one-size-fits-all language in every field. Ground each answer " +
+      "in specific details actually present in the page content, such as names, " +
+      "numbers, claims, features, or wording, rather than generic industry " +
+      "statements that could apply to any competitor.\n\n" +
+      "Never use em dashes in any of the four answers. Use periods, commas, or " +
+      "separate sentences instead.\n\n" +
+      "Every answer must use proper punctuation and capitalization: start with a " +
+      "capital letter, capitalize proper nouns and the product's own name " +
+      "correctly, and end with a period (or a question mark if it's phrased as a " +
+      "question).\n\n" +
+      `Hostname: ${hostname}\n\n` +
+      "Page content:\n" +
+      pageText;
+
+    console.log("Final pageText being sent to Claude for teardown:", pageText);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), TEARDOWN_TIMEOUT_MS);
+
+    let response;
+    try {
+      console.log("Calling Claude API for teardown generation");
+      response = await fetch(CLAUDE_API_URL, {
+        method: "POST",
+        headers: {
+          "x-api-key": claudeApiKey,
+          "anthropic-version": CLAUDE_API_VERSION,
+          "anthropic-dangerous-direct-browser-access": "true",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: CLAUDE_TEARDOWN_MODEL,
+          max_tokens: 800,
+          messages: [{ role: "user", content: prompt }]
+        }),
+        signal: controller.signal
+      });
+      console.log("Claude API fetch resolved, status:", response.status);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    if (!response.ok) {
+      throw new Error(`Claude API returned ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log("Claude API raw result:", result);
+    const text = extractTextFromClaudeContent(result && result.content);
+    if (typeof text !== "string") {
+      throw new Error("Unexpected Claude API response shape.");
+    }
+    console.log("Claude raw text response:", text);
+
+    let parsed;
+    try {
+      parsed = JSON.parse(stripCodeFence(text));
+    } catch (parseErr) {
+      console.error("Teardown: could not parse JSON from Claude response. Raw response:", text);
+      return { ok: false, error: "Claude did not return valid JSON." };
+    }
+
+    const { who, job, value, gap } = parsed || {};
+    if (![who, job, value, gap].every((field) => typeof field === "string" && field.trim())) {
+      console.error("Teardown: parsed JSON is missing one or more fields. Raw response:", text);
+      return { ok: false, error: "Claude's response was missing one or more fields." };
+    }
+
+    console.log("Parsed teardown:", { who, job, value, gap });
+    return { ok: true, who, job, value, gap };
+  } catch (err) {
+    console.error("Teardown: generateTeardown failed.", err);
+    return { ok: false, error: err.message || String(err) };
   }
 }
 
@@ -336,6 +470,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
       } catch (err) {
         console.error("Teardown: homepage fallback fetch failed.", err);
+        sendResponse({ ok: false, error: err.message || String(err) });
+      }
+    })();
+
+    return true; // keep the message channel open for the async sendResponse
+  }
+
+  if (message.type === "GENERATE_TEARDOWN") {
+    (async () => {
+      try {
+        const { pageText, hostname } = message;
+        if (!pageText || !hostname) {
+          sendResponse({ ok: false, error: "Missing pageText or hostname for teardown generation." });
+          return;
+        }
+
+        console.log("Starting teardown generation for:", hostname);
+        const teardown = await generateTeardown(pageText, hostname);
+        sendResponse(teardown);
+      } catch (err) {
+        console.error("Teardown: GENERATE_TEARDOWN handler failed.", err);
         sendResponse({ ok: false, error: err.message || String(err) });
       }
     })();

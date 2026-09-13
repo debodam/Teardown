@@ -56,6 +56,45 @@
     #fallbackNoBtn:hover {
       background: #444;
     }
+    #teardownAnswerInput {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 6px 8px;
+      border-radius: 6px;
+      border: 1px solid #333;
+      background: #1a1a1a;
+      color: #eee;
+      font-size: 13px;
+    }
+    .teardown-question {
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+    .teardown-answer-block {
+      margin-bottom: 10px;
+    }
+    .teardown-answer-label {
+      font-size: 11px;
+      color: #777;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+    .teardown-answer-text {
+      font-size: 13px;
+    }
+    .teardown-summary-block {
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #333;
+    }
+    .teardown-summary-block:last-of-type {
+      border-bottom: none;
+    }
+    .teardown-summary-label {
+      font-size: 13px;
+      font-weight: bold;
+      margin-bottom: 6px;
+    }
     #settingsToggle {
       display: inline-block;
       margin-top: 14px;
@@ -106,6 +145,33 @@
     <button id="fallbackYesBtn">Yes</button>
     <button id="fallbackNoBtn">No</button>
   </div>
+
+  <div id="teardownFlow" hidden>
+    <div id="teardownQuestion" class="teardown-question"></div>
+
+    <div id="teardownInputArea">
+      <input type="text" id="teardownAnswerInput" placeholder="Type your answer…">
+      <button id="teardownSubmitBtn">Submit</button>
+    </div>
+
+    <div id="teardownRevealArea" hidden>
+      <div class="teardown-answer-block">
+        <div class="teardown-answer-label">Your answer</div>
+        <div id="teardownUserAnswer" class="teardown-answer-text"></div>
+      </div>
+      <div class="teardown-answer-block">
+        <div class="teardown-answer-label">The Read</div>
+        <div id="teardownReadAnswer" class="teardown-answer-text"></div>
+      </div>
+      <button id="teardownNextBtn" hidden>Next</button>
+    </div>
+  </div>
+
+  <div id="teardownSummary" hidden>
+    <div id="teardownSummaryContent"></div>
+    <button id="startOverBtn">Teardown Another Page</button>
+  </div>
+
   <button id="startBtn">Start Teardown</button>
 
   <span id="settingsToggle">Settings</span>
