@@ -1,6 +1,6 @@
 // background.js — service worker.
-// Owns: injecting the page-read script on demand (triggered by popup.js,
-// since a default_popup means chrome.action.onClicked never fires),
+// Owns: mounting the overlay UI into the active tab on icon click (below),
+// injecting the page-read script on demand once the overlay asks for it,
 // the soft check via Claude (below), the homepage fallback fetch (below),
 // and the Claude 4-field teardown call (below).
 
@@ -232,6 +232,59 @@ chrome.runtime.onInstalled.addListener(() => {
   console.log("Teardown extension installed.");
 });
 
+const OVERLAY_HOST_ID = "teardown-overlay-host";
+
+// No default_popup, so this fires on every icon click as expected. Mounts
+// the overlay directly into the page's DOM instead of opening a native
+// popup, since only that lets us anchor the UI near the bottom third of
+// the viewport rather than being stuck under the toolbar icon.
+chrome.action.onClicked.addListener(async (tab) => {
+  console.log("Extension icon clicked, tab:", tab && tab.id);
+
+  if (!tab || !tab.id) {
+    console.error("Teardown: icon clicked but no valid tab to inject into.");
+    return;
+  }
+
+  try {
+    // Guard against a duplicate overlay if the icon is clicked again while
+    // one is already open — bring the existing one into view instead of
+    // injecting a second copy.
+    const [{ result: alreadyOpen } = {}] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: (hostId) => {
+        const existing = document.getElementById(hostId);
+        if (existing) {
+          existing.scrollIntoView({ behavior: "smooth", block: "center" });
+          return true;
+        }
+        return false;
+      },
+      args: [OVERLAY_HOST_ID]
+    });
+
+    if (alreadyOpen) {
+      console.log("Teardown: overlay already open on this tab, focused it instead of re-injecting.");
+      return;
+    }
+
+    // overlay.js builds its own Shadow DOM and injects its CSS inline into
+    // that shadow root (see overlay.js for why) — no separate insertCSS
+    // call needed, a shadow root couldn't be reached by insertCSS's
+    // page-<head> injection anyway.
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ["overlay.js"]
+    });
+
+    console.log("Teardown: overlay injected into tab", tab.id);
+  } catch (err) {
+    // Restricted pages (chrome://, the Web Store, etc.) will land here —
+    // there's nothing to inject into, so just log it rather than throw.
+    console.error("Teardown: could not inject overlay into this tab.", err);
+  }
+});
+
 // Root-domain heuristic for the homepage fallback (e.g. "www.medium.com" or
 // "someuser.substack.com" -> the registrable domain, dropping subdomains).
 // This is a v1 shortcut, not a real public-suffix-list lookup — it only
@@ -434,8 +487,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.log("CHECK_HOMEPAGE_FALLBACK received, message.domain:", message.domain);
         let domain = message.domain;
 
-        // The domain popup.js sends is state it cached from an earlier
-        // GRAB_PAGE_CONTENT response — if the popup was reopened, raced,
+        // The domain overlay.js sends is state it cached from an earlier
+        // GRAB_PAGE_CONTENT response — if the overlay was rebuilt, raced,
         // or that state got lost some other way, don't just fail. Re-derive
         // it fresh from the active tab's current URL, the same source
         // GRAB_PAGE_CONTENT used to compute it in the first place.
