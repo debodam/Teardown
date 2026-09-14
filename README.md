@@ -1,4 +1,6 @@
-<img src="./assets/icon128.png" width="64" height="64" alt="Teardown icon" /> # Teardown
+# Teardown
+
+<img src="./assets/icon128.png" width="64" height="64" alt="Teardown icon" />
 
 Practice your product sense on any product page, in one click.
 
