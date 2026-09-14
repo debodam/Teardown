@@ -10,7 +10,6 @@ Listed on the Chrome Web Store as **Teardown: Product Sense Practice**.
 
 ## Demo
 
-Example once added:
 ![Teardown demo](./assets/demo.gif)
 
 
