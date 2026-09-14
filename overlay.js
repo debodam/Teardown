@@ -208,6 +208,81 @@
         border-color: rgba(167, 139, 250, 0.35);
       }
 
+      /* Muted destructive variant — same secondary-button shape/weight as
+         everything else, just tinted toward the app's existing error red
+         (--teardown-status--error's #FB7185) so "Remove Key" doesn't read
+         as just another neutral option next to Save, without going as
+         loud as the full danger-button gradient reserved for the actual
+         confirm step. */
+      .secondary-button.danger-text {
+        color: #FB7185;
+      }
+
+      .secondary-button.danger-text:hover {
+        background: rgba(251, 113, 133, 0.10);
+        border-color: rgba(251, 113, 133, 0.35);
+      }
+
+      .danger-button {
+        color: #ffffff;
+        background: linear-gradient(135deg, #F43F5E, #E11D48);
+        border: 1px solid rgba(251, 113, 133, 0.5);
+        box-shadow: 0 8px 24px rgba(225, 29, 72, 0.28), 0 0 0 1px rgba(251, 113, 133, 0.10);
+      }
+
+      .danger-button:hover {
+        filter: brightness(1.08);
+      }
+
+      /* Remove Key's confirmation replaces #teardown-settings-form entirely
+         instead of appending below it — a destructive confirmation reads
+         as an afterthought squeezed under the Save button otherwise. This
+         gets the full width of the settings view and its own icon/heading,
+         same visual weight as the rest of the card's other full-screen
+         states. */
+      .teardown-remove-key-confirm {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 6px;
+        padding: 20px 4px 4px;
+      }
+
+      .teardown-remove-key-confirm[hidden] {
+        display: none;
+      }
+
+      .teardown-remove-key-confirm-icon {
+        width: 44px;
+        height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        font-size: 20px;
+        background: rgba(251, 113, 133, 0.14);
+        border: 1px solid rgba(251, 113, 133, 0.35);
+        margin-bottom: 6px;
+      }
+
+      .teardown-remove-key-confirm-title {
+        font-size: 17px;
+        font-weight: 700;
+        color: #F5F7FB;
+      }
+
+      .teardown-remove-key-confirm-text {
+        font-size: 13px;
+        color: #A7ADBC;
+        max-width: 380px;
+        margin-bottom: 10px;
+      }
+
+      .teardown-remove-key-confirm .teardown-confirm-actions {
+        width: 100%;
+      }
+
       .teardown-confirm-actions {
         display: flex;
         gap: 8px;
@@ -522,10 +597,112 @@
       .teardown-fade-in {
         animation: teardown-fade-in 180ms ease-out;
       }
+
+      /* Onboarding: a short first-run carousel gating the rest of the UI
+         until a Claude API key is saved. Deliberately does NOT reuse the
+         shared #teardown-title/#teardown-status header — both are hidden
+         while this shows instead — after the last bug where that shared
+         header leaked main-flow text into the Settings view; each slide
+         carries its own heading. */
+      .teardown-onboarding-heading {
+        font-size: 22px;
+        font-weight: 700;
+        line-height: 1.25;
+        margin: 0 44px 10px 0;
+        color: #F5F7FB;
+      }
+
+      .teardown-onboarding-subheading {
+        font-size: 14px;
+        color: #D5D9E3;
+        line-height: 1.5;
+        /* Same 12px rhythm .teardown-microprompt already uses elsewhere —
+           each line is its own div with zero default margin, so without
+           this they stack with no gap at all and read as one dense block
+           instead of separate beats. */
+        margin-bottom: 12px;
+      }
+
+      /* Inline highlight for key words/phrases within onboarding copy —
+         the cyan half of the accent gradient reads cleanly at small sizes
+         against the dark glass background, where the full gradient would
+         mostly just look flat over a few words. */
+      .teardown-accent {
+        color: #67E8F9;
+        font-weight: 600;
+      }
+
+      .teardown-onboarding-heading-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0 44px 10px 0;
+      }
+
+      .teardown-onboarding-heading-row .teardown-onboarding-heading {
+        margin: 0;
+      }
+
+      /* Same muted-to-accent circular treatment as .icon-button (gear/home),
+         just non-interactive — it's reassurance, not a control, so it
+         doesn't need its own hover state. */
+      .teardown-onboarding-icon {
+        width: 32px;
+        height: 32px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        color: #C4B5FD;
+        background: rgba(167, 139, 250, 0.14);
+        border: 1px solid rgba(167, 139, 250, 0.36);
+      }
+
+      .teardown-link {
+        color: #C4B5FD;
+        text-decoration: underline;
+      }
+
+      .teardown-link:hover {
+        color: #E9D5FF;
+      }
+
+      .teardown-onboarding-nav {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        margin-top: 22px;
+      }
+
+      .teardown-onboarding-dots {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+
+      .teardown-onboarding-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.18);
+        transition: background 0.15s ease, transform 0.15s ease;
+      }
+
+      .teardown-onboarding-dot--active {
+        background: var(--accent-gradient);
+        transform: scale(1.4);
+      }
     </style>
 
     <div id="teardown-card" class="teardown-card">
-      <button id="teardown-close-btn" class="icon-button teardown-close-btn" aria-label="Close">&times;</button>
+      <button id="teardown-close-btn" class="icon-button teardown-close-btn" aria-label="Close">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <path d="M6 6L18 18"></path>
+          <path d="M18 6L6 18"></path>
+        </svg>
+      </button>
 
       <div id="teardown-scroll" class="teardown-scroll">
       <h1 id="teardown-title" class="teardown-title">Teardown this product?</h1>
@@ -602,15 +779,76 @@
       </div>
 
       <div id="teardown-settings-view" hidden>
-        <div class="teardown-microprompt">Required to check pages and generate teardowns. Stored locally in your browser, only sent to Claude.</div>
-        <div class="teardown-microprompt">Your API key is stored only in your browser and never leaves your device except to communicate directly with Anthropic. This extension has no backend server and never sees, collects, or stores your key. You are responsible for keeping your own key secure.</div>
-        <div class="teardown-microprompt">Input your key once and start your teardowns!</div>
-        <label for="teardown-claude-key-input">Claude API key</label>
-        <input type="password" id="teardown-claude-key-input" class="teardown-input" placeholder="sk-ant-...">
-        <button id="teardown-save-key-btn" class="teardown-btn-block primary-button">Save Key</button>
+        <div id="teardown-settings-form">
+          <div class="teardown-microprompt">Required to check pages and generate teardowns. Stored locally in your browser, only sent to Claude.</div>
+          <div class="teardown-microprompt">Your API key is stored only in your browser and never leaves your device except to communicate directly with Anthropic. This extension has no backend server and never sees, collects, or stores your key. You are responsible for keeping your own key secure.</div>
+          <div class="teardown-microprompt">Input your key once and start your teardowns!</div>
+          <label for="teardown-claude-key-input">Claude API key</label>
+          <input type="password" id="teardown-claude-key-input" class="teardown-input" placeholder="sk-ant-...">
+          <button id="teardown-save-key-btn" class="teardown-btn-block primary-button">Save Key</button>
+          <button id="teardown-remove-key-btn" class="teardown-btn-block secondary-button danger-text">Remove Key</button>
+        </div>
+
+        <div id="teardown-remove-key-confirm" class="teardown-remove-key-confirm" hidden>
+          <div class="teardown-remove-key-confirm-icon">&#9888;</div>
+          <div class="teardown-remove-key-confirm-title">Remove your API key?</div>
+          <div class="teardown-remove-key-confirm-text">Removing your key will reset Teardown. You'll need to enter a new API key before using it again.</div>
+          <div class="teardown-confirm-actions">
+            <button id="teardown-remove-key-confirm-yes" class="teardown-btn-block danger-button">Confirm</button>
+            <button id="teardown-remove-key-confirm-no" class="teardown-btn-block secondary-button">Cancel</button>
+          </div>
+        </div>
+
         <div id="teardown-settings-status" class="teardown-settings-status"></div>
 
-        <button id="teardown-home-btn" class="icon-button teardown-corner-btn" aria-label="Home">&#8962;</button>
+        <button id="teardown-home-btn" class="icon-button teardown-corner-btn" aria-label="Home">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12l9-9 9 9"></path>
+            <path d="M5 10v10a1 1 0 0 0 1 1h3v-6h6v6h3a1 1 0 0 0 1-1V10"></path>
+          </svg>
+        </button>
+      </div>
+
+      <div id="teardown-onboarding" hidden>
+        <div id="teardown-onboarding-slide-0" class="teardown-onboarding-slide">
+          <h1 class="teardown-onboarding-heading">Welcome to <span class="teardown-accent">Teardown</span>!</h1>
+          <div class="teardown-onboarding-subheading">Practice your product sense by getting the read on any product, in <span class="teardown-accent">one click</span>.</div>
+        </div>
+
+        <div id="teardown-onboarding-slide-1" class="teardown-onboarding-slide" hidden>
+          <h1 class="teardown-onboarding-heading">How it works</h1>
+          <div class="teardown-onboarding-subheading">We check the page, then ask <span class="teardown-accent">five quick questions</span>: who it's for, what job it does, and more.</div>
+          <div class="teardown-onboarding-subheading"><span class="teardown-accent">Write your own answer first</span>, then <span class="teardown-accent">reveal the AI's take</span> on that same question.</div>
+          <div class="teardown-onboarding-subheading">Finish all five to get a one-time <span class="teardown-accent">score</span> on how sharp your read was.</div>
+          <div class="teardown-microprompt">Note: Teardown won't work on Chrome's internal pages (like chrome://extensions) or the Chrome Web Store itself, browser restriction, not a bug.</div>
+        </div>
+
+        <div id="teardown-onboarding-slide-2" class="teardown-onboarding-slide" hidden>
+          <div class="teardown-onboarding-heading-row">
+            <div class="teardown-onboarding-icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+              </svg>
+            </div>
+            <h1 class="teardown-onboarding-heading">Bring your own key</h1>
+          </div>
+          <div class="teardown-microprompt">Your API key is <span class="teardown-accent">stored only in your browser</span> and never leaves your device except to communicate directly with Anthropic. This extension has no backend server and <span class="teardown-accent">never sees, collects, or stores your key</span>. You are responsible for keeping your own key secure.</div>
+          <div class="teardown-microprompt">Get a key at <a class="teardown-link" href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a></div>
+          <label for="teardown-onboarding-key-input">Claude API key</label>
+          <input type="password" id="teardown-onboarding-key-input" class="teardown-input" placeholder="sk-ant-...">
+          <button id="teardown-onboarding-save-btn" class="teardown-btn-block primary-button">Save &amp; Start Teardown</button>
+          <div id="teardown-onboarding-status" class="teardown-settings-status"></div>
+        </div>
+
+        <div class="teardown-onboarding-nav">
+          <button id="teardown-onboarding-prev" class="icon-button" aria-label="Previous slide">&#8592;</button>
+          <div id="teardown-onboarding-dots" class="teardown-onboarding-dots">
+            <span class="teardown-onboarding-dot"></span>
+            <span class="teardown-onboarding-dot"></span>
+            <span class="teardown-onboarding-dot"></span>
+          </div>
+          <button id="teardown-onboarding-next" class="icon-button" aria-label="Next slide">&#8594;</button>
+        </div>
       </div>
       </div>
     </div>
@@ -657,6 +895,24 @@
   const claudeApiKeyInput = shadow.getElementById("teardown-claude-key-input");
   const saveTokenBtn = shadow.getElementById("teardown-save-key-btn");
   const settingsStatus = shadow.getElementById("teardown-settings-status");
+  const settingsForm = shadow.getElementById("teardown-settings-form");
+  const removeKeyBtn = shadow.getElementById("teardown-remove-key-btn");
+  const removeKeyConfirm = shadow.getElementById("teardown-remove-key-confirm");
+  const removeKeyConfirmYesBtn = shadow.getElementById("teardown-remove-key-confirm-yes");
+  const removeKeyConfirmNoBtn = shadow.getElementById("teardown-remove-key-confirm-no");
+
+  const onboardingView = shadow.getElementById("teardown-onboarding");
+  const onboardingSlideEls = [
+    shadow.getElementById("teardown-onboarding-slide-0"),
+    shadow.getElementById("teardown-onboarding-slide-1"),
+    shadow.getElementById("teardown-onboarding-slide-2")
+  ];
+  const onboardingDotEls = Array.from(shadow.querySelectorAll(".teardown-onboarding-dot"));
+  const onboardingPrevBtn = shadow.getElementById("teardown-onboarding-prev");
+  const onboardingNextBtn = shadow.getElementById("teardown-onboarding-next");
+  const onboardingKeyInput = shadow.getElementById("teardown-onboarding-key-input");
+  const onboardingSaveBtn = shadow.getElementById("teardown-onboarding-save-btn");
+  const onboardingStatus = shadow.getElementById("teardown-onboarding-status");
 
   // Central place to set the status line so error styling (red, per the
   // design spec — "actual failures only, never normal states") never
@@ -692,6 +948,109 @@
     startBtn.hidden = false;
     fadeIn(teardownTitle, statusEl, startBtn);
   }
+
+  const KEY_INPUT_PLACEHOLDER_EMPTY = "sk-ant-...";
+  const KEY_INPUT_PLACEHOLDER_SAVED = "Key saved ✓";
+
+  // Shared by both places a key can be saved (onboarding's slide 3, and
+  // Settings later) — persists it, then blanks whichever input triggered
+  // the save so it never sits readable/copyable, and syncs Settings' own
+  // input placeholder either way. A key saved from onboarding should still
+  // read as "already on file" if Settings is opened later in the session.
+  function persistClaudeApiKey(key, sourceInput) {
+    return new Promise((resolve) => {
+      chrome.storage.local.set({ claudeApiKey: key }, () => {
+        sourceInput.value = "";
+        claudeApiKeyInput.placeholder = key ? KEY_INPUT_PLACEHOLDER_SAVED : KEY_INPUT_PLACEHOLDER_EMPTY;
+        resolve();
+      });
+    });
+  }
+
+  // --- Onboarding: a 3-slide first-run carousel shown instead of the
+  // normal main flow whenever no Claude API key is on file yet (the check
+  // that decides this lives near the bottom of this file, alongside
+  // Settings' own key-input init, since both start from the same
+  // chrome.storage.local read). Deliberately hides the shared
+  // title/status header rather than reusing it — see the CSS comment
+  // above .teardown-onboarding-heading for why. Slide 3 collects the key
+  // and, once saved, hands straight off to the normal idle screen; there's
+  // no separate "done" step to click through.
+  const ONBOARDING_SLIDE_COUNT = onboardingSlideEls.length;
+  let onboardingSlideIndex = 0;
+
+  function renderOnboardingSlide(index) {
+    onboardingSlideIndex = index;
+    onboardingSlideEls.forEach((slide, i) => {
+      slide.hidden = i !== index;
+    });
+    onboardingDotEls.forEach((dot, i) => {
+      dot.classList.toggle("teardown-onboarding-dot--active", i === index);
+    });
+    onboardingPrevBtn.hidden = index === 0;
+    onboardingNextBtn.hidden = index === ONBOARDING_SLIDE_COUNT - 1;
+    fadeIn(onboardingSlideEls[index]);
+    if (index === ONBOARDING_SLIDE_COUNT - 1) {
+      onboardingKeyInput.focus();
+    }
+  }
+
+  function showOnboarding() {
+    teardownTitle.hidden = true;
+    statusEl.hidden = true;
+    teardownMain.hidden = true;
+    settingsView.hidden = true;
+    onboardingView.hidden = false;
+    renderOnboardingSlide(0);
+  }
+
+  // Drops the carousel onto the exact idle screen a returning user sees —
+  // #teardown-main's own children were never touched while onboarding was
+  // showing, so nothing needs resetting here beyond un-hiding the header.
+  function endOnboarding() {
+    onboardingView.hidden = true;
+    teardownTitle.hidden = false;
+    statusEl.hidden = false;
+    teardownMain.hidden = false;
+    fadeIn(teardownTitle, statusEl, teardownMain);
+  }
+
+  onboardingPrevBtn.addEventListener("click", () => {
+    if (onboardingSlideIndex > 0) {
+      renderOnboardingSlide(onboardingSlideIndex - 1);
+    }
+  });
+
+  onboardingNextBtn.addEventListener("click", () => {
+    if (onboardingSlideIndex < ONBOARDING_SLIDE_COUNT - 1) {
+      renderOnboardingSlide(onboardingSlideIndex + 1);
+    }
+  });
+
+  function submitOnboardingKey() {
+    if (!isExtensionContextValid()) {
+      onboardingStatus.textContent = "This overlay is out of date — refresh the page and click the icon again.";
+      return;
+    }
+
+    const key = onboardingKeyInput.value.trim();
+    if (!key) {
+      onboardingStatus.textContent = "Enter your Claude API key to continue.";
+      return;
+    }
+
+    persistClaudeApiKey(key, onboardingKeyInput).then(() => {
+      endOnboarding();
+    });
+  }
+
+  onboardingSaveBtn.addEventListener("click", submitOnboardingKey);
+
+  onboardingKeyInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      submitOnboardingKey();
+    }
+  });
 
   // Closing fully removes the overlay from the DOM (not just hides it) —
   // clicking the icon again builds a fresh one from scratch.
@@ -1344,16 +1703,17 @@
     fadeIn(teardownTitle, statusEl, startBtn);
   });
 
-  const KEY_INPUT_PLACEHOLDER_EMPTY = "sk-ant-...";
-  const KEY_INPUT_PLACEHOLDER_SAVED = "Key saved ✓";
-
   // Never pre-fill the input with the actual stored key — once a key has
   // been saved, the field should never make it readable/copyable again,
   // including the next time Settings is opened. The placeholder alone
-  // tells the user whether a key is already on file.
+  // tells the user whether a key is already on file. This is also the one
+  // point that decides whether onboarding needs to run at all.
   chrome.storage.local.get("claudeApiKey", ({ claudeApiKey }) => {
     claudeApiKeyInput.value = "";
     claudeApiKeyInput.placeholder = claudeApiKey ? KEY_INPUT_PLACEHOLDER_SAVED : KEY_INPUT_PLACEHOLDER_EMPTY;
+    if (!claudeApiKey) {
+      showOnboarding();
+    }
   });
 
   saveTokenBtn.addEventListener("click", () => {
@@ -1363,14 +1723,49 @@
     }
 
     const key = claudeApiKeyInput.value.trim();
-    chrome.storage.local.set({ claudeApiKey: key }, () => {
-      // Blank the field right after a successful save (or clear) — the real
-      // key lives in chrome.storage.local and is what every API call
-      // actually uses; the visible input is just for entry, never a
-      // long-term display of it.
-      claudeApiKeyInput.value = "";
-      claudeApiKeyInput.placeholder = key ? KEY_INPUT_PLACEHOLDER_SAVED : KEY_INPUT_PLACEHOLDER_EMPTY;
+    persistClaudeApiKey(key, claudeApiKeyInput).then(() => {
       settingsStatus.textContent = key ? "Key saved." : "Key cleared.";
+    });
+  });
+
+  // Remove Key: confirming replaces the ENTIRE settings form (#teardown-
+  // settings-form — every microprompt, the input, both buttons), not just
+  // the Remove Key button itself. A destructive confirmation squeezed in
+  // below Save read as an afterthought rather than something to actually
+  // pause on, so it now gets the full settings view to itself, same as
+  // any other full-screen state elsewhere in the overlay.
+  removeKeyBtn.addEventListener("click", () => {
+    settingsForm.hidden = true;
+    removeKeyConfirm.hidden = false;
+    fadeIn(removeKeyConfirm);
+  });
+
+  removeKeyConfirmNoBtn.addEventListener("click", () => {
+    removeKeyConfirm.hidden = true;
+    settingsForm.hidden = false;
+    fadeIn(settingsForm);
+  });
+
+  removeKeyConfirmYesBtn.addEventListener("click", () => {
+    if (!isExtensionContextValid()) {
+      settingsStatus.textContent = "This overlay is out of date — refresh the page and click the icon again.";
+      return;
+    }
+
+    chrome.storage.local.remove("claudeApiKey", () => {
+      console.log("Teardown: API key removed, resetting and returning to onboarding.");
+      claudeApiKeyInput.value = "";
+      claudeApiKeyInput.placeholder = KEY_INPUT_PLACEHOLDER_EMPTY;
+      settingsStatus.textContent = "";
+      removeKeyConfirm.hidden = true;
+      settingsForm.hidden = false;
+      // Fully reset the main flow's own state too (not just Settings) —
+      // "reset Teardown" means whatever mid-teardown state was sitting
+      // underneath Settings shouldn't still be there if this key is ever
+      // replaced and the user lands back on the idle screen. showOnboarding()
+      // hides #teardown-settings-view itself, closing Settings.
+      resetToInitialState();
+      showOnboarding();
     });
   });
 })();
