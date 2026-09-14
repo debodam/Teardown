@@ -49,4 +49,4 @@ You are responsible for keeping your own API key secure, same as with any BYOK t
 
 ## Reporting a concern
 
-If you find a security issue, open an issue on this repo or reach out directly.
+If you find a security issue, open an issue on this repo or reach out directly to debojeetdam.business@gmail.com
