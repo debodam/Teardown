@@ -1,0 +1,17 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Teardown permission</title>
+<link rel="stylesheet" href="key-entry.css">
+</head>
+<body>
+  <div id="prompt-root">
+    <div class="microprompt" id="prompt-text">Teardown needs <span class="accent">one-time access</span></div>
+    <div class="microprompt">We <span class="accent">only read the page</span> to check what it's about, once. We <span class="accent">never modify anything</span> on it. Chrome's own prompt says "read and change" next, that's just its standard wording for this permission type, not something this actually does.</div>
+    <button id="allow-btn" class="btn-block primary-button" type="button">Allow access</button>
+    <div id="prompt-status" class="status-line"></div>
+  </div>
+  <script src="permission-prompt.js"></script>
+</body>
+</html>

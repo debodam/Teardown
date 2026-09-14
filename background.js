@@ -1,8 +1,26 @@
 // background.js — service worker.
 // Owns: mounting the overlay UI into the active tab on icon click (below),
 // injecting the page-read script on demand once the overlay asks for it,
-// the soft check via Claude (below), the homepage fallback fetch (below),
+// the soft check via Claude (below), the homepage fallback navigation (below),
 // and the Claude 4-field teardown call (below).
+
+// Restricts chrome.storage.local to "trusted contexts" only — the
+// background service worker and genuine extension pages (key-entry.html,
+// loaded as an iframe by overlay.js) — and denies it to content scripts
+// outright, at the platform level. overlay.js runs in the host page's own
+// DOM as a content script, so after this call it physically cannot read
+// or write the stored API key even if a bug ever tried to; the only way
+// to touch it is from here, or from key-entry.html's own script.
+chrome.runtime.onStartup.addListener(lockDownStorage);
+chrome.runtime.onInstalled.addListener(lockDownStorage);
+
+async function lockDownStorage() {
+  try {
+    await chrome.storage.local.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" });
+  } catch (err) {
+    console.error("Teardown: could not restrict storage.local to trusted contexts.", err);
+  }
+}
 
 const CLAUDE_API_URL = "https://api.anthropic.com/v1/messages";
 const CLAUDE_API_VERSION = "2023-06-01";
@@ -13,6 +31,17 @@ const CLAUDE_SOFT_CHECK_MODEL = "claude-haiku-4-5-20251001";
 // answers, not a quick classification — so it gets the more capable model.
 const CLAUDE_TEARDOWN_MODEL = "claude-sonnet-5";
 const CLAUDE_TIMEOUT_MS = 10000;
+
+// Sanity caps on message payloads from the content script, enforced below
+// in the onMessage listener. None of this is about trusting the content
+// script less than the rest of the codebase — it's that a message
+// listener is the extension's actual trust boundary (anything reachable
+// by chrome.runtime.sendMessage should be validated as if it might be
+// malformed or hostile), independent of whether anything currently sends
+// something like that.
+const MAX_PAGE_TEXT_LENGTH = 40000;
+const MAX_ANSWER_LENGTH = 2000;
+const MAX_HOSTNAME_LENGTH = 253; // the actual DNS hostname length limit
 
 // Pulls the actual text answer out of a Claude API response's content
 // array. Newer models can put a "thinking" block (or other non-text block
@@ -96,13 +125,24 @@ async function checkIsProductPage(pageText) {
     // paying to send an extra 700 characters of it bought nothing. Cost
     // optimization, not a quality change.
     const promptPageText = pageText.slice(0, 800);
-    console.log("Final pageText being sent to Claude:", promptPageText);
+    // Length only, not the full text — the page content a user is
+    // looking at isn't secret, but there's no reason to dump the whole
+    // thing into the console on every single check either.
+    console.log("Sending soft check request, page text length:", promptPageText.length);
 
     let response;
     try {
       console.log("Calling Claude API for soft check");
       response = await fetch(CLAUDE_API_URL, {
         method: "POST",
+        // The key lives only in the x-api-key header below — never omit
+        // these two: credentials:"omit" keeps this request from ever
+        // carrying ambient cookies/HTTP auth for api.anthropic.com, and
+        // no-referrer keeps this page's own URL (and by extension nothing
+        // about the site being torn down) off the wire in a Referer
+        // header, since neither is needed for a bearer-token API call.
+        credentials: "omit",
+        referrerPolicy: "no-referrer",
         headers: {
           "x-api-key": claudeApiKey,
           "anthropic-version": CLAUDE_API_VERSION,
@@ -162,7 +202,6 @@ async function checkIsProductPage(pageText) {
     }
 
     const result = await response.json();
-    console.log("Claude API raw result:", result);
     const text = extractTextFromClaudeContent(result && result.content);
     if (typeof text !== "string") {
       throw new Error("Unexpected Claude API response shape.");
@@ -242,7 +281,7 @@ async function generateTeardown(pageText, hostname, productName) {
       "Page content:\n" +
       pageText;
 
-    console.log("Final pageText being sent to Claude for teardown:", pageText);
+    console.log("Sending teardown generation request, page text length:", pageText.length);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), TEARDOWN_TIMEOUT_MS);
@@ -252,6 +291,14 @@ async function generateTeardown(pageText, hostname, productName) {
       console.log("Calling Claude API for teardown generation");
       response = await fetch(CLAUDE_API_URL, {
         method: "POST",
+        // The key lives only in the x-api-key header below — never omit
+        // these two: credentials:"omit" keeps this request from ever
+        // carrying ambient cookies/HTTP auth for api.anthropic.com, and
+        // no-referrer keeps this page's own URL (and by extension nothing
+        // about the site being torn down) off the wire in a Referer
+        // header, since neither is needed for a bearer-token API call.
+        credentials: "omit",
+        referrerPolicy: "no-referrer",
         headers: {
           "x-api-key": claudeApiKey,
           "anthropic-version": CLAUDE_API_VERSION,
@@ -286,7 +333,6 @@ async function generateTeardown(pageText, hostname, productName) {
     }
 
     const result = await response.json();
-    console.log("Claude API raw result:", result);
     const text = extractTextFromClaudeContent(result && result.content);
     if (typeof text !== "string") {
       throw new Error("Unexpected Claude API response shape.");
@@ -372,7 +418,7 @@ async function generateScore(answers, hostname, productName) {
       (productName ? `Product name: ${productName}\n` : "") +
       `Hostname: ${hostname}\n`;
 
-    console.log("Final prompt being sent to Claude for scoring:", prompt);
+    console.log("Sending score generation request, prompt length:", prompt.length);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), SCORE_TIMEOUT_MS);
@@ -382,6 +428,14 @@ async function generateScore(answers, hostname, productName) {
       console.log("Calling Claude API for session score");
       response = await fetch(CLAUDE_API_URL, {
         method: "POST",
+        // The key lives only in the x-api-key header below — never omit
+        // these two: credentials:"omit" keeps this request from ever
+        // carrying ambient cookies/HTTP auth for api.anthropic.com, and
+        // no-referrer keeps this page's own URL (and by extension nothing
+        // about the site being torn down) off the wire in a Referer
+        // header, since neither is needed for a bearer-token API call.
+        credentials: "omit",
+        referrerPolicy: "no-referrer",
         headers: {
           "x-api-key": claudeApiKey,
           "anthropic-version": CLAUDE_API_VERSION,
@@ -413,7 +467,6 @@ async function generateScore(answers, hostname, productName) {
     }
 
     const result = await response.json();
-    console.log("Claude API raw result:", result);
     const text = extractTextFromClaudeContent(result && result.content);
     if (typeof text !== "string") {
       throw new Error("Unexpected Claude API response shape.");
@@ -530,89 +583,148 @@ function getRootDomain(hostname) {
   return lastTwo;
 }
 
-// Builds the same "Title / Meta description / Page text" format used by
-// grabPageContent, for content we fetched as raw HTML instead of reading
-// from a live tab (the homepage fallback below).
-function formatPageText(title, metaDescription, rawTextExcerpt) {
-  return [
-    `Title: ${title}`,
-    `Meta description: ${metaDescription}`,
-    "Page text:",
-    rawTextExcerpt
-  ].join("\n\n");
-}
+const HOMEPAGE_NAV_TIMEOUT_MS = 20000;
 
-// Lightweight entity decoding — not exhaustive, just the handful that show
-// up constantly in real page HTML. There's no DOMParser available in a
-// service worker, so we can't lean on the browser to do this for us.
-function decodeHtmlEntities(str) {
-  return str
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/gi, "'");
-}
+// Resolves once the given tab reports a "complete" status, or rejects on
+// timeout. Always removes its own listener either way.
+// How long a tab has to report "complete" and then stay quiet (no further
+// "loading" transition) before a redirect/consent chain is considered
+// actually finished. Sites with a heavier homepage load (LinkedIn,
+// notably — often several redirect/consent hops) can fire complete ->
+// loading -> complete more than once; resolving on the very first
+// "complete" catches an intermediate page that the next hop immediately
+// tears down again, which looked like the overlay flashing and vanishing,
+// or on a slow chain, like nothing ever happening at all.
+const HOMEPAGE_NAV_QUIET_MS = 1200;
 
-function extractTitleFromHtml(html) {
-  const match = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-  return match ? decodeHtmlEntities(match[1].trim()) : "";
-}
+function waitForTabSettled(tabId, timeoutMs, quietMs) {
+  return new Promise((resolve, reject) => {
+    let quietTimer = null;
 
-function extractMetaDescriptionFromHtml(html) {
-  const metaTags = html.match(/<meta\b[^>]*>/gi) || [];
-  for (const tag of metaTags) {
-    if (/name\s*=\s*["']description["']/i.test(tag)) {
-      const contentMatch = tag.match(/content\s*=\s*["']([^"']*)["']/i);
-      if (contentMatch) {
-        return decodeHtmlEntities(contentMatch[1].trim());
+    const overallTimeoutId = setTimeout(() => {
+      cleanup();
+      reject(new Error("Timed out waiting for the homepage to load."));
+    }, timeoutMs);
+
+    function cleanup() {
+      clearTimeout(overallTimeoutId);
+      clearTimeout(quietTimer);
+      chrome.tabs.onUpdated.removeListener(listener);
+    }
+
+    function armQuietTimer() {
+      clearTimeout(quietTimer);
+      quietTimer = setTimeout(() => {
+        cleanup();
+        resolve();
+      }, quietMs);
+    }
+
+    function listener(updatedTabId, changeInfo) {
+      if (updatedTabId !== tabId) {
+        return;
+      }
+      if (changeInfo.status === "complete") {
+        armQuietTimer();
+      } else if (changeInfo.status === "loading") {
+        // A new hop started — the last "complete" wasn't the real end of
+        // the chain, so cancel the pending resolve and wait for the next
+        // "complete" instead.
+        clearTimeout(quietTimer);
       }
     }
-  }
-  return "";
+
+    chrome.tabs.onUpdated.addListener(listener);
+
+    // Covers the case where the tab is already sitting at "complete" by
+    // the time this listener attaches (a fast/simple load could beat us
+    // here).
+    chrome.tabs.get(tabId, (tab) => {
+      if (chrome.runtime.lastError) {
+        return;
+      }
+      if (tab && tab.status === "complete") {
+        armQuietTimer();
+      }
+    });
+  });
 }
 
-// Approximates document.body.innerText from raw HTML by stripping
-// script/style blocks and tags. It won't match real innerText for
-// JS-rendered pages, but for a fallback homepage fetch it's a reasonable
-// stand-in — we mainly need title + meta description anyway.
-function extractApproxTextFromHtml(html) {
-  const withoutScriptsAndStyles = html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ");
-  const withoutTags = withoutScriptsAndStyles.replace(/<[^>]+>/g, " ");
-  return decodeHtmlEntities(withoutTags).replace(/\s+/g, " ").trim();
+// A handful of titles that mean "this isn't the site, it's a bot-check /
+// consent wall it served instead" — Cloudflare's "Checking your browser" /
+// "Just a moment" interstitial, a generic CAPTCHA challenge, or an
+// access-denied page. There's no fixing an active block by reading more
+// content, so this just fails with an honest, specific reason instead of
+// running the soft check against a CAPTCHA page.
+const BOT_WALL_TITLE_PATTERNS = [
+  /checking your browser/i,
+  /just a moment/i,
+  /attention required/i,
+  /captcha/i,
+  /access denied/i,
+  /are you a human/i
+];
+
+function looksLikeBotWall(title) {
+  return BOT_WALL_TITLE_PATTERNS.some((pattern) => pattern.test(title));
 }
 
-const HOMEPAGE_FETCH_TIMEOUT_MS = 10000;
+// Reads a domain's actual homepage for the "want to teardown [domain]
+// instead?" fallback, by opening it in a real, inactive browser tab and
+// running the exact same grabPageContent() injection used for the page
+// the user actually has open. A genuine tab navigation has normal
+// cookies, a normal browser fingerprint, and actually executes the page's
+// JS (unlike a raw fetch() of the page's HTML, which is what an earlier
+// version of this used and which both got blocked by sites with bot
+// detection and came back nearly empty on JS-rendered pages). Requires
+// host permission for this one domain, requested just-in-time via the
+// permission-prompt.html iframe (chrome.permissions.request(), tied to
+// the user's own click there) rather than declared broadly upfront — by
+// the time this function runs, that permission is expected to already be
+// granted; the CHECK_HOMEPAGE_FALLBACK handler below only re-confirms it
+// defensively. The tab is always closed again afterward, whether this
+// succeeds or fails.
+async function checkHomepageViaBackgroundTab(domain) {
+  const tab = await chrome.tabs.create({ url: `https://${domain}`, active: false });
 
-// Fetches a domain's homepage and extracts the same three signals
-// grabPageContent reads from a live tab, for the "want to teardown
-// [domain] instead?" fallback.
-async function fetchHomepageContent(domain) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), HOMEPAGE_FETCH_TIMEOUT_MS);
-
-  let response;
   try {
-    console.log("Fetching homepage fallback for domain:", domain);
-    response = await fetch(`https://${domain}`, { signal: controller.signal });
+    try {
+      await waitForTabSettled(tab.id, HOMEPAGE_NAV_TIMEOUT_MS, HOMEPAGE_NAV_QUIET_MS);
+    } catch (settleErr) {
+      // Didn't reach a clean, quiet "complete" within the timeout — read
+      // whatever's there anyway rather than giving up outright; a heavy
+      // redirect/consent chain that's still mostly done is still more
+      // useful than nothing.
+      console.warn("Teardown: homepage fallback tab never settled cleanly, reading it anyway.", settleErr);
+    }
+
+    const [injectionResult] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: grabPageContent
+    });
+
+    const data = injectionResult && injectionResult.result;
+    if (!data) {
+      throw new Error("Could not read this domain's homepage.");
+    }
+
+    if (looksLikeBotWall(data.pageTitle)) {
+      console.warn("Homepage fallback: got what looks like a bot-check page, not the real site. Title:", JSON.stringify(data.pageTitle));
+      const err = new Error(`This site blocked automated access (served a "${data.pageTitle}" page instead of its real homepage).`);
+      err.isBotWall = true;
+      throw err;
+    }
+
+    console.log("Homepage fallback read via tab — title:", JSON.stringify(data.pageTitle), "text length:", data.pageText.length);
+
+    return { pageText: data.pageText, hostname: data.hostname || domain };
   } finally {
-    clearTimeout(timeoutId);
+    chrome.tabs.remove(tab.id).catch(() => {
+      // Nothing to do if the tab is already gone (e.g. the user closed it,
+      // or it never fully opened) — not worth surfacing as a failure of
+      // the actual fallback attempt.
+    });
   }
-
-  if (!response.ok) {
-    throw new Error(`Homepage fetch returned ${response.status}`);
-  }
-
-  const html = await response.text();
-  const title = extractTitleFromHtml(html);
-  const metaDescription = extractMetaDescriptionFromHtml(html);
-  const rawTextExcerpt = extractApproxTextFromHtml(html).slice(0, 1500);
-
-  return formatPageText(title, metaDescription, rawTextExcerpt);
 }
 
 // Runs inside the target page. Keep this self-contained — it's serialized
@@ -647,11 +759,69 @@ function grabPageContent() {
   };
 }
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log("Message received in background.js", message);
+// Every message type this extension actually recognizes, checked before
+// anything else below runs. There is deliberately no generic "fetch this"
+// or "run this request" type here — every operation is a specific, named
+// action defined in this file, never something a page (or an already
+// broken assumption in the content script) could puppet into an arbitrary
+// request.
+const ALLOWED_MESSAGE_TYPES = new Set([
+  "GRAB_PAGE_CONTENT",
+  "HAS_HOMEPAGE_PERMISSION",
+  "CHECK_HOMEPAGE_FALLBACK",
+  "GENERATE_TEARDOWN",
+  "GENERATE_SCORE",
+  "HAS_CLAUDE_API_KEY"
+]);
 
-  if (!message) {
-    return false; // not for us
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Only the dispatch-relevant type, not the whole payload — GENERATE_TEARDOWN
+  // and GENERATE_SCORE messages carry the page's own text and the user's
+  // own typed answers, which don't need to be echoed into the console on
+  // every single message.
+  console.log("Message received in background.js, type:", message && message.type);
+
+  if (!message || typeof message.type !== "string" || !ALLOWED_MESSAGE_TYPES.has(message.type)) {
+    return false; // not for us — either malformed or not a type we handle
+  }
+
+  if (message.type === "HAS_CLAUDE_API_KEY") {
+    (async () => {
+      try {
+        const { claudeApiKey } = await chrome.storage.local.get("claudeApiKey");
+        sendResponse({ ok: true, hasKey: !!claudeApiKey });
+      } catch (err) {
+        sendResponse({ ok: false, error: err.message || String(err) });
+      }
+    })();
+
+    return true; // keep the message channel open for the async sendResponse
+  }
+
+  if (message.type === "HAS_HOMEPAGE_PERMISSION") {
+    // Read-only, no user-gesture requirement — unlike
+    // chrome.permissions.request(), .contains() is just a check and can
+    // run anywhere, anytime. Lets overlay.js decide up front whether it
+    // needs to show the permission-prompt iframe at all, or can skip
+    // straight to the homepage fallback check for a domain already
+    // granted from an earlier session.
+    (async () => {
+      try {
+        const domain = message.domain;
+        if (!domain || typeof domain !== "string" || domain.length > MAX_HOSTNAME_LENGTH) {
+          sendResponse({ ok: false, error: "Invalid domain." });
+          return;
+        }
+        // *.domain, matching what's actually requested in
+        // permission-prompt.js — see the comment there for why.
+        const granted = await chrome.permissions.contains({ origins: [`https://*.${domain}/*`] });
+        sendResponse({ ok: true, granted });
+      } catch (err) {
+        sendResponse({ ok: false, error: err.message || String(err) });
+      }
+    })();
+
+    return true; // keep the message channel open for the async sendResponse
   }
 
   if (message.type === "GRAB_PAGE_CONTENT") {
@@ -716,42 +886,82 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // The domain overlay.js sends is state it cached from an earlier
         // GRAB_PAGE_CONTENT response — if the overlay was rebuilt, raced,
         // or that state got lost some other way, don't just fail. Re-derive
-        // it fresh from the active tab's current URL, the same source
+        // it fresh from the sending tab's current URL, the same source
         // GRAB_PAGE_CONTENT used to compute it in the first place.
-        if (!domain) {
-          console.warn("Teardown: no domain in CHECK_HOMEPAGE_FALLBACK message, re-deriving from the active tab.");
-          const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-          if (activeTab && activeTab.url) {
-            try {
-              domain = getRootDomain(new URL(activeTab.url).hostname);
-              console.log("Re-derived domain from active tab:", domain);
-            } catch (urlErr) {
-              console.error("Teardown: could not parse active tab URL for fallback domain.", urlErr);
-            }
+        if (!domain && sender.tab && sender.tab.url) {
+          console.warn("Teardown: no domain in CHECK_HOMEPAGE_FALLBACK message, re-deriving from the sending tab.");
+          try {
+            domain = getRootDomain(new URL(sender.tab.url).hostname);
+            console.log("Re-derived domain from sending tab:", domain);
+          } catch (urlErr) {
+            console.error("Teardown: could not parse sending tab's URL for fallback domain.", urlErr);
           }
         }
 
-        if (!domain) {
-          sendResponse({ ok: false, error: "No domain provided for homepage fallback." });
+        if (!domain || typeof domain !== "string" || domain.length > MAX_HOSTNAME_LENGTH) {
+          sendResponse({ ok: false, error: "No valid domain provided for homepage fallback." });
           return;
         }
 
-        const pageText = await fetchHomepageContent(domain);
+        // Host access to arbitrary domains isn't declared upfront in
+        // host_permissions — the permission-prompt.html iframe requests
+        // it, scoped to this ONE domain, before overlay.js ever sends
+        // this message. That has to happen there, not here:
+        // chrome.permissions.request() only works "during a user
+        // gesture," and neither a content script (chrome.permissions
+        // isn't exposed there at all) nor this background script (the
+        // gesture context doesn't survive the trip through
+        // chrome.runtime.sendMessage — confirmed directly, it throws
+        // "This function must be called during a user gesture" here)
+        // can call it successfully. chrome.permissions.contains() has no
+        // such restriction, so it's still checked here as a defensive
+        // sanity check (this should never actually be false by the time
+        // this message arrives). *.domain, not just domain, since a bare
+        // root domain often redirects to a www./regional subdomain
+        // (linkedin.com -> www.linkedin.com, seen directly in practice)
+        // that a bare-domain grant wouldn't cover.
+        const origin = `https://*.${domain}/*`;
+        const alreadyGranted = await chrome.permissions.contains({ origins: [origin] });
+        if (!alreadyGranted) {
+          sendResponse({ ok: false, error: `Missing permission to check ${domain}.` });
+          return;
+        }
+
+        const { pageText, hostname } = await checkHomepageViaBackgroundTab(domain);
 
         console.log("Starting product page check (homepage fallback)");
         const { isProductPage, isPortfolio, productName } = await checkIsProductPage(pageText);
 
+        // Unlike the original page's own soft check, a plain "no" here
+        // doesn't end the session — the user already explicitly confirmed
+        // they want THIS domain torn down by clicking through the "want
+        // to teardown X instead?" prompt, and the read itself genuinely
+        // succeeded (not a bot-wall, not an error). The one thing that
+        // still does end it is landing on an actual personal portfolio
+        // site, same as the original page's own check. A non-portfolio
+        // "no" just means the classifier didn't confidently recognize
+        // this specific page — e.g. a domain the user happens to be
+        // logged into resolves to a personalized view (LinkedIn's own
+        // feed, not its public homepage) rather than obvious marketing
+        // copy. That's still worth tearing down; it just won't have a
+        // clean extracted product name, and the UI already falls back to
+        // showing the domain name plainly when that happens.
+        if (isPortfolio) {
+          sendResponse({ ok: true, isProductPage: false, isPortfolio: true, productName: null, pageText, hostname });
+          return;
+        }
+
         sendResponse({
           ok: true,
-          isProductPage,
-          isPortfolio,
+          isProductPage: true,
+          isPortfolio: false,
           productName,
           pageText,
-          hostname: domain
+          hostname
         });
       } catch (err) {
-        console.error("Teardown: homepage fallback fetch failed.", err);
-        sendResponse({ ok: false, error: err.message || String(err) });
+        console.error("Teardown: homepage fallback check failed.", err);
+        sendResponse({ ok: false, error: err.message || String(err), isBotWall: !!err.isBotWall });
       }
     })();
 
@@ -762,8 +972,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       try {
         const { pageText, hostname, productName } = message;
-        if (!pageText || !hostname) {
-          sendResponse({ ok: false, error: "Missing pageText or hostname for teardown generation." });
+        if (
+          typeof pageText !== "string" || !pageText || pageText.length > MAX_PAGE_TEXT_LENGTH ||
+          typeof hostname !== "string" || !hostname || hostname.length > MAX_HOSTNAME_LENGTH ||
+          (productName != null && (typeof productName !== "string" || productName.length > MAX_ANSWER_LENGTH))
+        ) {
+          sendResponse({ ok: false, error: "Invalid pageText, hostname, or productName for teardown generation." });
           return;
         }
 
@@ -783,8 +997,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       try {
         const { answers, hostname, productName } = message;
-        if (!Array.isArray(answers) || answers.length === 0 || !hostname) {
-          sendResponse({ ok: false, error: "Missing answers or hostname for scoring." });
+        const answersValid =
+          Array.isArray(answers) &&
+          answers.length > 0 &&
+          answers.length <= 10 &&
+          answers.every((answer) => {
+            if (!answer || typeof answer !== "object") {
+              return false;
+            }
+            const { question, userAnswer, aiAnswer } = answer;
+            return (
+              typeof question === "string" && question.length <= MAX_ANSWER_LENGTH &&
+              // userAnswer is allowed to be empty (an unanswered question),
+              // just not absurdly long or the wrong type.
+              (userAnswer === undefined || (typeof userAnswer === "string" && userAnswer.length <= MAX_ANSWER_LENGTH)) &&
+              typeof aiAnswer === "string" && aiAnswer.length <= MAX_ANSWER_LENGTH
+            );
+          });
+
+        if (
+          !answersValid ||
+          typeof hostname !== "string" || !hostname || hostname.length > MAX_HOSTNAME_LENGTH ||
+          (productName != null && (typeof productName !== "string" || productName.length > MAX_ANSWER_LENGTH))
+        ) {
+          sendResponse({ ok: false, error: "Invalid answers, hostname, or productName for scoring." });
           return;
         }
 

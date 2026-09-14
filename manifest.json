@@ -5,10 +5,17 @@
   "description": "Write your own product teardown before the AI reveals its take.",
   "permissions": ["activeTab", "scripting", "storage"],
   "host_permissions": [
-    "https://api.anthropic.com/*",
+    "https://api.anthropic.com/*"
+  ],
+  "optional_host_permissions": [
     "https://*/*",
     "http://*/*"
   ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "action": {
     "default_icon": {
       "16": "icons/icon16.png",
@@ -18,5 +25,15 @@
   },
   "background": {
     "service_worker": "background.js"
-  }
+  },
+  "content_security_policy": {
+    "extension_pages": "default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'self'; connect-src 'self' https://api.anthropic.com"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["key-entry.html", "key-entry.css", "key-entry.js", "permission-prompt.html", "permission-prompt.js"],
+      "matches": ["https://*/*", "http://*/*"],
+      "use_dynamic_url": true
+    }
+  ]
 }

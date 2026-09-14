@@ -91,9 +91,21 @@
         font-size: 13px;
         line-height: 1.5;
 
-        background: rgba(20, 22, 30, 0.78);
-        -webkit-backdrop-filter: blur(24px) saturate(125%);
-        backdrop-filter: blur(24px) saturate(125%);
+        /* Flat and solid, not translucent+blurred, and deliberately the
+           SAME exact value as .teardown-key-frame / key-entry.css's own
+           html,body background below. Glassmorphism (a translucent card
+           blurring whatever page is behind it) looks great on its own,
+           but it made the card's own rendered color shift depending on
+           the page underneath it — and the key-entry/permission-prompt
+           iframes elsewhere in this card can only ever render a flat
+           solid fill (backdrop-filter doesn't correctly composite through
+           a nested iframe's browsing context — confirmed directly, no
+           value of transparency fixed it), so a translucent card could
+           never reliably match them. Making the card solid too is what
+           actually guarantees they always match, on every page, instead
+           of matching by coincidence on whichever page a color happened
+           to be eyeballed against. */
+        background: #23252F;
         border: 1px solid rgba(255, 255, 255, 0.15);
         border-radius: 18px;
         box-shadow:
@@ -208,79 +220,39 @@
         border-color: rgba(167, 139, 250, 0.35);
       }
 
-      /* Muted destructive variant — same secondary-button shape/weight as
-         everything else, just tinted toward the app's existing error red
-         (--teardown-status--error's #FB7185) so "Remove Key" doesn't read
-         as just another neutral option next to Save, without going as
-         loud as the full danger-button gradient reserved for the actual
-         confirm step. */
-      .secondary-button.danger-text {
-        color: #FB7185;
-      }
-
-      .secondary-button.danger-text:hover {
-        background: rgba(251, 113, 133, 0.10);
-        border-color: rgba(251, 113, 133, 0.35);
-      }
-
-      .danger-button {
-        color: #ffffff;
-        background: linear-gradient(135deg, #F43F5E, #E11D48);
-        border: 1px solid rgba(251, 113, 133, 0.5);
-        box-shadow: 0 8px 24px rgba(225, 29, 72, 0.28), 0 0 0 1px rgba(251, 113, 133, 0.10);
-      }
-
-      .danger-button:hover {
-        filter: brightness(1.08);
-      }
-
-      /* Remove Key's confirmation replaces #teardown-settings-form entirely
-         instead of appending below it — a destructive confirmation reads
-         as an afterthought squeezed under the Save button otherwise. This
-         gets the full width of the settings view and its own icon/heading,
-         same visual weight as the rest of the card's other full-screen
-         states. */
-      .teardown-remove-key-confirm {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        text-align: center;
-        gap: 6px;
-        padding: 20px 4px 4px;
-      }
-
-      .teardown-remove-key-confirm[hidden] {
-        display: none;
-      }
-
-      .teardown-remove-key-confirm-icon {
-        width: 44px;
-        height: 44px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 999px;
-        font-size: 20px;
-        background: rgba(251, 113, 133, 0.14);
-        border: 1px solid rgba(251, 113, 133, 0.35);
-        margin-bottom: 6px;
-      }
-
-      .teardown-remove-key-confirm-title {
-        font-size: 17px;
-        font-weight: 700;
-        color: #F5F7FB;
-      }
-
-      .teardown-remove-key-confirm-text {
-        font-size: 13px;
-        color: #A7ADBC;
-        max-width: 380px;
-        margin-bottom: 10px;
-      }
-
-      .teardown-remove-key-confirm .teardown-confirm-actions {
+      /* The key entry/Save/Remove UI, and the homepage-fallback permission
+         prompt, live inside their own extension pages loaded here as
+         iframes — see the security notes at the top of key-entry.js for
+         why (real cross-origin isolation for the one input that actually
+         matters, not just Shadow DOM). Sized by postMessage from that
+         document (KEY_ENTRY_RESIZE / PERMISSION_PROMPT_RESIZE) rather
+         than a fixed height, since content varies by mode/state.
+         Deliberately a SOLID color, not transparent: .teardown-card's own
+         backdrop-filter blur doesn't correctly composite through a nested
+         iframe's browsing context (a real cross-browser rendering
+         limit, not a bug in the transparency CSS itself — the iframe's
+         embedded document can be as transparent as it likes and still
+         falls back to opaque white), so true see-through blending isn't
+         reliable here. #23252F is a deliberately lighter approximation
+         than .teardown-card's own flat rgba(20,22,30,0.78) — the card
+         itself never actually renders that dark in practice since it's
+         only 78% opaque over whatever page is behind it, so matching its
+         raw CSS value looks visibly darker than the real thing (this is a
+         color chosen to eyeball-match rendered screenshots, not a
+         computed value — nudge it if a specific page makes the seam
+         obvious again). Kept identical to key-entry.css's own html/body
+         background so the iframe box and its embedded document agree
+         regardless of which layer ends up visible. */
+      .teardown-key-frame {
+        display: block;
         width: 100%;
+        border: none;
+        background: #23252F;
+        overflow: hidden;
+        /* A reasonable guess for its resting height, so there's no visible
+           collapse/snap before the first resize message arrives
+           (effectively instant, but not zero time). */
+        height: 190px;
       }
 
       .teardown-confirm-actions {
@@ -566,19 +538,6 @@
         margin-bottom: 10px;
       }
 
-      #teardown-settings-view label {
-        display: block;
-        font-size: 12px;
-        color: #A7ADBC;
-        margin-bottom: 4px;
-      }
-
-      .teardown-settings-status {
-        margin-top: 6px;
-        font-size: 11px;
-        color: #A7ADBC;
-      }
-
       /* Applied whenever one full screen/state replaces another (initial
          prompt, confirmation, a question card, the analyzing state, the
          summary). Deliberately opacity-only — no slide/scale — and short
@@ -629,7 +588,6 @@
          mostly just look flat over a few words. */
       .teardown-accent {
         color: #67E8F9;
-        font-weight: 600;
       }
 
       .teardown-onboarding-heading-row {
@@ -714,6 +672,10 @@
           <button id="teardown-confirm-no" class="teardown-btn-block secondary-button">No</button>
         </div>
 
+        <div id="teardown-permission-step" hidden>
+          <iframe id="teardown-permission-frame" class="teardown-key-frame" title="Allow homepage access"></iframe>
+        </div>
+
         <div id="teardown-loading" class="teardown-loading" hidden>
           <div class="analysis-orb"><div class="analysis-orb-spin"></div></div>
           <div id="teardown-loading-status" class="teardown-loading-text"></div>
@@ -779,27 +741,7 @@
       </div>
 
       <div id="teardown-settings-view" hidden>
-        <div id="teardown-settings-form">
-          <div class="teardown-microprompt">Required to check pages and generate teardowns. Stored locally in your browser, only sent to Claude.</div>
-          <div class="teardown-microprompt">Your API key is stored only in your browser and never leaves your device except to communicate directly with Anthropic. This extension has no backend server and never sees, collects, or stores your key. You are responsible for keeping your own key secure.</div>
-          <div class="teardown-microprompt">Input your key once and start your teardowns!</div>
-          <label for="teardown-claude-key-input">Claude API key</label>
-          <input type="password" id="teardown-claude-key-input" class="teardown-input" placeholder="sk-ant-...">
-          <button id="teardown-save-key-btn" class="teardown-btn-block primary-button">Save Key</button>
-          <button id="teardown-remove-key-btn" class="teardown-btn-block secondary-button danger-text">Remove Key</button>
-        </div>
-
-        <div id="teardown-remove-key-confirm" class="teardown-remove-key-confirm" hidden>
-          <div class="teardown-remove-key-confirm-icon">&#9888;</div>
-          <div class="teardown-remove-key-confirm-title">Remove your API key?</div>
-          <div class="teardown-remove-key-confirm-text">Removing your key will reset Teardown. You'll need to enter a new API key before using it again.</div>
-          <div class="teardown-confirm-actions">
-            <button id="teardown-remove-key-confirm-yes" class="teardown-btn-block danger-button">Confirm</button>
-            <button id="teardown-remove-key-confirm-no" class="teardown-btn-block secondary-button">Cancel</button>
-          </div>
-        </div>
-
-        <div id="teardown-settings-status" class="teardown-settings-status"></div>
+        <iframe id="teardown-settings-key-frame" class="teardown-key-frame" title="Claude API key entry"></iframe>
 
         <button id="teardown-home-btn" class="icon-button teardown-corner-btn" aria-label="Home">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -832,12 +774,8 @@
             </div>
             <h1 class="teardown-onboarding-heading">Bring your own key</h1>
           </div>
-          <div class="teardown-microprompt">Your API key is <span class="teardown-accent">stored only in your browser</span> and never leaves your device except to communicate directly with Anthropic. This extension has no backend server and <span class="teardown-accent">never sees, collects, or stores your key</span>. You are responsible for keeping your own key secure.</div>
           <div class="teardown-microprompt">Get a key at <a class="teardown-link" href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a></div>
-          <label for="teardown-onboarding-key-input">Claude API key</label>
-          <input type="password" id="teardown-onboarding-key-input" class="teardown-input" placeholder="sk-ant-...">
-          <button id="teardown-onboarding-save-btn" class="teardown-btn-block primary-button">Save &amp; Start Teardown</button>
-          <div id="teardown-onboarding-status" class="teardown-settings-status"></div>
+          <iframe id="teardown-onboarding-key-frame" class="teardown-key-frame" title="Claude API key entry"></iframe>
         </div>
 
         <div class="teardown-onboarding-nav">
@@ -860,6 +798,8 @@
   const confirmActions = shadow.getElementById("teardown-confirm-actions");
   const confirmYesBtn = shadow.getElementById("teardown-confirm-yes");
   const confirmNoBtn = shadow.getElementById("teardown-confirm-no");
+  const permissionStep = shadow.getElementById("teardown-permission-step");
+  const permissionFrame = shadow.getElementById("teardown-permission-frame");
   const startBtn = shadow.getElementById("teardown-start-btn");
   const closeBtn = shadow.getElementById("teardown-close-btn");
 
@@ -892,14 +832,7 @@
   const settingsView = shadow.getElementById("teardown-settings-view");
   const gearBtn = shadow.getElementById("teardown-gear-btn");
   const homeBtn = shadow.getElementById("teardown-home-btn");
-  const claudeApiKeyInput = shadow.getElementById("teardown-claude-key-input");
-  const saveTokenBtn = shadow.getElementById("teardown-save-key-btn");
-  const settingsStatus = shadow.getElementById("teardown-settings-status");
-  const settingsForm = shadow.getElementById("teardown-settings-form");
-  const removeKeyBtn = shadow.getElementById("teardown-remove-key-btn");
-  const removeKeyConfirm = shadow.getElementById("teardown-remove-key-confirm");
-  const removeKeyConfirmYesBtn = shadow.getElementById("teardown-remove-key-confirm-yes");
-  const removeKeyConfirmNoBtn = shadow.getElementById("teardown-remove-key-confirm-no");
+  const settingsKeyFrame = shadow.getElementById("teardown-settings-key-frame");
 
   const onboardingView = shadow.getElementById("teardown-onboarding");
   const onboardingSlideEls = [
@@ -910,9 +843,160 @@
   const onboardingDotEls = Array.from(shadow.querySelectorAll(".teardown-onboarding-dot"));
   const onboardingPrevBtn = shadow.getElementById("teardown-onboarding-prev");
   const onboardingNextBtn = shadow.getElementById("teardown-onboarding-next");
-  const onboardingKeyInput = shadow.getElementById("teardown-onboarding-key-input");
-  const onboardingSaveBtn = shadow.getElementById("teardown-onboarding-save-btn");
-  const onboardingStatus = shadow.getElementById("teardown-onboarding-status");
+  const onboardingKeyFrame = shadow.getElementById("teardown-onboarding-key-frame");
+
+  // The key-entry iframes are the one place in the extension that ever
+  // touches the actual API key — see key-entry.js for the full security
+  // rationale. Point each at the same page, distinguished only by a mode
+  // query param (Settings gets Save + Remove; onboarding gets Save only
+  // and requires a non-empty key). chrome.runtime.getURL keeps this
+  // correct across dev/packaged builds rather than hardcoding the
+  // extension's id.
+  const keyEntryBaseUrl = chrome.runtime.getURL("key-entry.html");
+  onboardingKeyFrame.src = `${keyEntryBaseUrl}?mode=onboarding`;
+  settingsKeyFrame.src = `${keyEntryBaseUrl}?mode=settings`;
+
+  // permission-prompt.html's src is set dynamically per domain (see
+  // showPermissionPrompt below) since the domain isn't known until the
+  // homepage fallback is actually triggered, unlike the two key-entry
+  // iframes above which are fixed for the overlay's whole lifetime.
+  const permissionPromptBaseUrl = chrome.runtime.getURL("permission-prompt.html");
+
+  // Precomputed once — chrome.runtime.getURL("") returns
+  // "chrome-extension://<id>/", and the trailing slash needs stripping to
+  // match a postMessage event's own `origin` string exactly.
+  const EXTENSION_ORIGIN = chrome.runtime.getURL("").slice(0, -1);
+
+  // Both key-entry iframes AND the permission-prompt iframe post progress
+  // back through the same window message listener below. Every message
+  // is checked on three fronts before anything acts on it: it must come
+  // from our own extension origin (a malicious host page's own script
+  // sharing this same window object could otherwise fake one — content
+  // scripts and the page they're injected into both receive 'message'
+  // events dispatched to window), it must come from one of the iframe
+  // elements this file actually created (not merely SOME
+  // chrome-extension:// frame), and it must carry that iframe's own
+  // marker field. None of the messages acted on here ever contain key
+  // material — only the fact that something happened.
+
+  // Pure validation predicate, deliberately kept free of any DOM/chrome
+  // dependency beyond the plain values passed in, so it can be exercised
+  // directly by a standalone test (see teardown-verify/origin-validation.
+  // test.js) without needing a real browser or extension environment.
+  // Returns which known frame the event legitimately came from
+  // ("onboarding" | "settings"), or null if it fails any of the three
+  // checks and should be ignored: wrong origin (a malicious host page's
+  // own script sharing this same window object could otherwise fake one),
+  // wrong source (not one of the two iframe windows this file actually
+  // created), or a missing/wrong marker field.
+  function resolveTrustedKeyEntrySource(event, extensionOrigin, onboardingWindow, settingsWindow) {
+    if (event.origin !== extensionOrigin) {
+      return null;
+    }
+    if (event.source !== onboardingWindow && event.source !== settingsWindow) {
+      return null;
+    }
+    if (!event.data || event.data.source !== "teardown-key-entry") {
+      return null;
+    }
+    return event.source === onboardingWindow ? "onboarding" : "settings";
+  }
+
+  // Same shape as resolveTrustedKeyEntrySource above, for the one
+  // permission-prompt iframe instead of the two key-entry ones — kept as
+  // a separate pure function (rather than generalizing the other one)
+  // since the two have different origin-of-truth marker strings and it's
+  // cheap to just test them independently.
+  function resolveTrustedPermissionPromptSource(event, extensionOrigin, promptWindow) {
+    if (event.origin !== extensionOrigin) {
+      return false;
+    }
+    if (event.source !== promptWindow) {
+      return false;
+    }
+    if (!event.data || event.data.source !== "teardown-permission-prompt") {
+      return false;
+    }
+    return true;
+  }
+
+  // Set by showPermissionPrompt() while it's waiting on the user, called
+  // with true/false once PERMISSION_GRANTED or PERMISSION_DECLINED
+  // arrives, then cleared. null the rest of the time.
+  let permissionPromptCallback = null;
+
+  function handleTrustedFrameMessage(event) {
+    if (resolveTrustedPermissionPromptSource(event, EXTENSION_ORIGIN, permissionFrame.contentWindow)) {
+      const data = event.data;
+
+      if (data.type === "PERMISSION_PROMPT_RESIZE" && typeof data.height === "number") {
+        permissionFrame.style.height = `${Math.max(0, data.height)}px`;
+        return;
+      }
+
+      if (data.type === "PERMISSION_GRANTED" || data.type === "PERMISSION_DECLINED") {
+        const callback = permissionPromptCallback;
+        permissionPromptCallback = null;
+        if (callback) {
+          callback(data.type === "PERMISSION_GRANTED");
+        }
+      }
+      return;
+    }
+
+    const trustedFrom = resolveTrustedKeyEntrySource(
+      event,
+      EXTENSION_ORIGIN,
+      onboardingKeyFrame.contentWindow,
+      settingsKeyFrame.contentWindow
+    );
+    if (!trustedFrom) {
+      return;
+    }
+
+    const fromOnboarding = trustedFrom === "onboarding";
+    const fromSettings = trustedFrom === "settings";
+    const data = event.data;
+
+    if (data.type === "KEY_ENTRY_RESIZE" && typeof data.height === "number") {
+      const frame = fromOnboarding ? onboardingKeyFrame : settingsKeyFrame;
+      frame.style.height = `${Math.max(0, data.height)}px`;
+      return;
+    }
+
+    if (data.type === "KEY_SAVED" && fromOnboarding) {
+      endOnboarding();
+      return;
+    }
+
+    if (data.type === "KEY_REMOVED" && fromSettings) {
+      // Fully reset the main flow's own state too (not just Settings) —
+      // removing the key means whatever mid-teardown state was sitting
+      // underneath Settings shouldn't still be there once a new key is
+      // entered and the user lands back on the idle screen.
+      resetToInitialState();
+      showOnboarding();
+    }
+  }
+
+  window.addEventListener("message", handleTrustedFrameMessage);
+
+  // Shows the "Allow access to [domain]" iframe in place of the
+  // Yes/No confirm buttons, and resolves the given callback with
+  // true/false once the user grants or declines it inside that iframe
+  // (see permission-prompt.js for why that click has to happen there).
+  function showPermissionPrompt(domain, callback) {
+    permissionPromptCallback = callback;
+    confirmActions.hidden = true;
+    permissionFrame.src = `${permissionPromptBaseUrl}?domain=${encodeURIComponent(domain)}`;
+    permissionStep.hidden = false;
+    fadeIn(permissionStep);
+  }
+
+  function hidePermissionPrompt() {
+    permissionPromptCallback = null;
+    permissionStep.hidden = true;
+  }
 
   // Central place to set the status line so error styling (red, per the
   // design spec — "actual failures only, never normal states") never
@@ -949,24 +1033,6 @@
     fadeIn(teardownTitle, statusEl, startBtn);
   }
 
-  const KEY_INPUT_PLACEHOLDER_EMPTY = "sk-ant-...";
-  const KEY_INPUT_PLACEHOLDER_SAVED = "Key saved ✓";
-
-  // Shared by both places a key can be saved (onboarding's slide 3, and
-  // Settings later) — persists it, then blanks whichever input triggered
-  // the save so it never sits readable/copyable, and syncs Settings' own
-  // input placeholder either way. A key saved from onboarding should still
-  // read as "already on file" if Settings is opened later in the session.
-  function persistClaudeApiKey(key, sourceInput) {
-    return new Promise((resolve) => {
-      chrome.storage.local.set({ claudeApiKey: key }, () => {
-        sourceInput.value = "";
-        claudeApiKeyInput.placeholder = key ? KEY_INPUT_PLACEHOLDER_SAVED : KEY_INPUT_PLACEHOLDER_EMPTY;
-        resolve();
-      });
-    });
-  }
-
   // --- Onboarding: a 3-slide first-run carousel shown instead of the
   // normal main flow whenever no Claude API key is on file yet (the check
   // that decides this lives near the bottom of this file, alongside
@@ -990,9 +1056,6 @@
     onboardingPrevBtn.hidden = index === 0;
     onboardingNextBtn.hidden = index === ONBOARDING_SLIDE_COUNT - 1;
     fadeIn(onboardingSlideEls[index]);
-    if (index === ONBOARDING_SLIDE_COUNT - 1) {
-      onboardingKeyInput.focus();
-    }
   }
 
   function showOnboarding() {
@@ -1027,35 +1090,18 @@
     }
   });
 
-  function submitOnboardingKey() {
-    if (!isExtensionContextValid()) {
-      onboardingStatus.textContent = "This overlay is out of date — refresh the page and click the icon again.";
-      return;
-    }
-
-    const key = onboardingKeyInput.value.trim();
-    if (!key) {
-      onboardingStatus.textContent = "Enter your Claude API key to continue.";
-      return;
-    }
-
-    persistClaudeApiKey(key, onboardingKeyInput).then(() => {
-      endOnboarding();
-    });
-  }
-
-  onboardingSaveBtn.addEventListener("click", submitOnboardingKey);
-
-  onboardingKeyInput.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      submitOnboardingKey();
-    }
-  });
-
   // Closing fully removes the overlay from the DOM (not just hides it) —
-  // clicking the icon again builds a fresh one from scratch.
+  // clicking the icon again builds a fresh one from scratch. Explicitly
+  // detaching handleTrustedFrameMessage matters here in a way none of
+  // this file's other listeners do: everything else is scoped to
+  // elements inside `host`, so removing `host` lets them get
+  // garbage-collected along with it, but a window-level listener is
+  // registered directly on the host page's own global window and would
+  // otherwise keep running (holding references to these now-removed
+  // iframes) for the rest of the page's lifetime.
   closeBtn.addEventListener("click", () => {
     console.log("Teardown: close button clicked, removing overlay.");
+    window.removeEventListener("message", handleTrustedFrameMessage);
     host.remove();
   });
 
@@ -1212,7 +1258,9 @@
     showAnalyzing(productName);
 
     const message = { type: "GENERATE_TEARDOWN", pageText, hostname, productName };
-    console.log("Sending GENERATE_TEARDOWN message", message);
+    // hostname/productName only — pageText is the page's own content, no
+    // need to echo the whole thing into this page's own console.
+    console.log("Sending GENERATE_TEARDOWN message for:", hostname, productName);
 
     chrome.runtime.sendMessage(message, (response) => {
       hideAnalyzing();
@@ -1336,7 +1384,9 @@
       hostname: teardownState.hostname,
       productName: teardownState.productName
     };
-    console.log("Sending GENERATE_SCORE message", message);
+    // hostname/productName only — the answers array carries the user's
+    // own typed answers, no need to echo those into the console either.
+    console.log("Sending GENERATE_SCORE message for:", message.hostname, message.productName);
 
     chrome.runtime.sendMessage(message, (response) => {
       if (chrome.runtime.lastError) {
@@ -1535,7 +1585,9 @@
   // yet) falls back to the plain generic phrasing.
   function showConfirmPrompt(confirmation) {
     pendingConfirmation = confirmation;
-    console.log("pendingConfirmation set to:", pendingConfirmation);
+    // isProductPage/hostname only — confirmation also carries this page's
+    // full text (pageText), no need to echo that into the console.
+    console.log("pendingConfirmation set, isProductPage:", confirmation.isProductPage, "hostname:", confirmation.hostname);
     hideAnalyzing();
     teardownTitle.textContent = "Teardown this product?";
 
@@ -1608,10 +1660,10 @@
           return;
         }
 
-        // Full extraction detail (title/meta description/raw text) is for our
-        // own debugging only — the overlay UI just shows a clean verdict.
-        console.log("GRAB_PAGE_CONTENT response received", response);
-        console.log("response.rootDomain:", response.rootDomain);
+        // isProductPage/rootDomain only — response also carries this
+        // page's full extracted text (pageText/pageTitle), no need to
+        // echo that into the console.
+        console.log("GRAB_PAGE_CONTENT response received, isProductPage:", response.isProductPage, "rootDomain:", response.rootDomain);
 
         // Portfolio detection only matters when isProductPage is false — a
         // portfolio site that also sells a product/merch is still a
@@ -1637,7 +1689,7 @@
 
   confirmYesBtn.addEventListener("click", () => {
     const confirmation = pendingConfirmation;
-    console.log("Teardown confirmed:", confirmation);
+    console.log("Teardown confirmed, isProductPage:", confirmation && confirmation.isProductPage);
 
     if (!isExtensionContextValid()) {
       setStatus("This overlay is out of date — refresh the page and click the icon again.", true);
@@ -1658,38 +1710,89 @@
     }
 
     // The soft check said no on the current page, so "yes" here means
-    // fetch that domain's actual homepage and try again there instead.
-    showAnalyzing();
+    // read that domain's actual homepage in the background and try again
+    // there — this page stays open the whole time (you don't lose your
+    // place on whatever you were reading). That domain isn't covered by
+    // host_permissions upfront, so accessing it requires an optional,
+    // per-origin permission grant, which needs its own small extra step:
+    // chrome.permissions.request() only works "during a user gesture,"
+    // and that gesture context survives neither a content script (where
+    // chrome.permissions isn't exposed at all) nor a trip through
+    // chrome.runtime.sendMessage to the background script (confirmed
+    // directly — it throws "This function must be called during a user
+    // gesture" there even though it's still handling this same click, one
+    // hop later). A real click inside a genuine extension-page iframe
+    // (permission-prompt.html) is the only place left where the browser
+    // actually credits it — see showPermissionPrompt above and
+    // permission-prompt.js for the rest of that reasoning.
+    const domain = confirmation.rootDomain;
 
-    const message = { type: "CHECK_HOMEPAGE_FALLBACK", domain: confirmation.rootDomain };
-    console.log("Sending CHECK_HOMEPAGE_FALLBACK message", message);
+    function proceedWithHomepageFallback() {
+      showAnalyzing();
 
-    chrome.runtime.sendMessage(message, (response) => {
+      const message = { type: "CHECK_HOMEPAGE_FALLBACK", domain };
+      console.log("Sending CHECK_HOMEPAGE_FALLBACK message for domain:", domain);
+
+      chrome.runtime.sendMessage(message, (response) => {
+        if (chrome.runtime.lastError) {
+          hideAnalyzing();
+          resetToStartWithError(`Error: ${chrome.runtime.lastError.message}`);
+          return;
+        }
+
+        if (!response || !response.ok) {
+          const errMsg = response && response.error ? response.error : "Unknown error.";
+          console.error("Homepage fallback check failed:", errMsg);
+          hideAnalyzing();
+          // A bot-check wall is a distinct, honest reason worth actually
+          // saying — background.js's own message is already written to
+          // be user-presentable for it. Everything else collapses to the
+          // generic explanation, since a raw exception message (a
+          // network error, a timeout) isn't something a user should have
+          // to parse.
+          resetToStartWithError(
+            response && response.isBotWall ? errMsg : "Couldn't find a clear product page here."
+          );
+          return;
+        }
+
+        console.log("Homepage fallback content received, isProductPage:", response.isProductPage);
+
+        if (response.isProductPage) {
+          startTeardownGeneration(response.pageText, response.hostname, response.productName);
+        } else if (response.isPortfolio) {
+          showPortfolioMessage();
+        } else {
+          // No further fallback attempts — stop here.
+          hideAnalyzing();
+          resetToStartWithError("Couldn't find a clear product page here.");
+        }
+      });
+    }
+
+    // Ask background.js (a trusted context where chrome.permissions
+    // actually exists) whether this domain is already granted — a plain
+    // read, no gesture needed for that part. Only shows the extra
+    // permission-prompt iframe step if it isn't.
+    chrome.runtime.sendMessage({ type: "HAS_HOMEPAGE_PERMISSION", domain }, (permResponse) => {
       if (chrome.runtime.lastError) {
-        hideAnalyzing();
         resetToStartWithError(`Error: ${chrome.runtime.lastError.message}`);
         return;
       }
 
-      if (!response || !response.ok) {
-        const errMsg = response && response.error ? response.error : "Unknown error.";
-        console.error("Homepage fallback check failed:", errMsg);
-        hideAnalyzing();
-        resetToStartWithError("Couldn't find a clear product page here.");
+      if (permResponse && permResponse.ok && permResponse.granted) {
+        proceedWithHomepageFallback();
         return;
       }
 
-      console.log("Homepage fallback content received", response);
-
-      if (response.isProductPage) {
-        startTeardownGeneration(response.pageText, response.hostname, response.productName);
-      } else if (response.isPortfolio) {
-        showPortfolioMessage();
-      } else {
-        // No further fallback attempts — stop here.
-        hideAnalyzing();
-        resetToStartWithError("Couldn't find a clear product page here.");
-      }
+      showPermissionPrompt(domain, (granted) => {
+        hidePermissionPrompt();
+        if (!granted) {
+          resetToStartWithError(`Permission to check ${domain} was declined.`);
+          return;
+        }
+        proceedWithHomepageFallback();
+      });
     });
   });
 
@@ -1703,69 +1806,20 @@
     fadeIn(teardownTitle, statusEl, startBtn);
   });
 
-  // Never pre-fill the input with the actual stored key — once a key has
-  // been saved, the field should never make it readable/copyable again,
-  // including the next time Settings is opened. The placeholder alone
-  // tells the user whether a key is already on file. This is also the one
-  // point that decides whether onboarding needs to run at all.
-  chrome.storage.local.get("claudeApiKey", ({ claudeApiKey }) => {
-    claudeApiKeyInput.value = "";
-    claudeApiKeyInput.placeholder = claudeApiKey ? KEY_INPUT_PLACEHOLDER_SAVED : KEY_INPUT_PLACEHOLDER_EMPTY;
-    if (!claudeApiKey) {
-      showOnboarding();
-    }
-  });
-
-  saveTokenBtn.addEventListener("click", () => {
-    if (!isExtensionContextValid()) {
-      settingsStatus.textContent = "This overlay is out of date — refresh the page and click the icon again.";
+  // Whether onboarding needs to run at all. This content script never
+  // touches chrome.storage.local for the key itself (background.js locks
+  // storage.local down to TRUSTED_CONTEXTS on startup, which would refuse
+  // a direct read from here anyway) — it only asks background.js for a
+  // plain boolean, never the key value. Save/Remove both live entirely
+  // inside the key-entry iframes now; this is purely the initial "which
+  // screen do I open on" decision.
+  chrome.runtime.sendMessage({ type: "HAS_CLAUDE_API_KEY" }, (response) => {
+    if (chrome.runtime.lastError) {
+      console.error("Teardown: could not check for a saved API key.", chrome.runtime.lastError.message);
       return;
     }
-
-    const key = claudeApiKeyInput.value.trim();
-    persistClaudeApiKey(key, claudeApiKeyInput).then(() => {
-      settingsStatus.textContent = key ? "Key saved." : "Key cleared.";
-    });
-  });
-
-  // Remove Key: confirming replaces the ENTIRE settings form (#teardown-
-  // settings-form — every microprompt, the input, both buttons), not just
-  // the Remove Key button itself. A destructive confirmation squeezed in
-  // below Save read as an afterthought rather than something to actually
-  // pause on, so it now gets the full settings view to itself, same as
-  // any other full-screen state elsewhere in the overlay.
-  removeKeyBtn.addEventListener("click", () => {
-    settingsForm.hidden = true;
-    removeKeyConfirm.hidden = false;
-    fadeIn(removeKeyConfirm);
-  });
-
-  removeKeyConfirmNoBtn.addEventListener("click", () => {
-    removeKeyConfirm.hidden = true;
-    settingsForm.hidden = false;
-    fadeIn(settingsForm);
-  });
-
-  removeKeyConfirmYesBtn.addEventListener("click", () => {
-    if (!isExtensionContextValid()) {
-      settingsStatus.textContent = "This overlay is out of date — refresh the page and click the icon again.";
-      return;
-    }
-
-    chrome.storage.local.remove("claudeApiKey", () => {
-      console.log("Teardown: API key removed, resetting and returning to onboarding.");
-      claudeApiKeyInput.value = "";
-      claudeApiKeyInput.placeholder = KEY_INPUT_PLACEHOLDER_EMPTY;
-      settingsStatus.textContent = "";
-      removeKeyConfirm.hidden = true;
-      settingsForm.hidden = false;
-      // Fully reset the main flow's own state too (not just Settings) —
-      // "reset Teardown" means whatever mid-teardown state was sitting
-      // underneath Settings shouldn't still be there if this key is ever
-      // replaced and the user lands back on the idle screen. showOnboarding()
-      // hides #teardown-settings-view itself, closing Settings.
-      resetToInitialState();
+    if (response && response.ok && !response.hasKey) {
       showOnboarding();
-    });
+    }
   });
 })();

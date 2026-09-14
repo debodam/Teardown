@@ -1,0 +1,34 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Teardown key entry</title>
+<link rel="stylesheet" href="key-entry.css">
+</head>
+<body>
+  <div id="key-form">
+    <div id="settings-intro" hidden>
+      <div class="microprompt">Required to check pages and generate teardowns. Stored locally in your browser, only sent to Claude.</div>
+      <div class="microprompt">Input your key once and start your teardowns!</div>
+    </div>
+    <label for="key-input">Claude API key</label>
+    <div class="microprompt">Your API key is <span class="accent">stored only in your browser</span> and never leaves your device except to communicate directly with Anthropic. This extension has no backend server and <span class="accent">never sees, collects, or stores your key</span>. You are responsible for keeping your own key secure.</div>
+    <input type="password" id="key-input" autocomplete="off" spellcheck="false" placeholder="sk-ant-...">
+    <button id="save-btn" class="btn-block primary-button" type="button">Save Key</button>
+    <button id="remove-btn" class="btn-block secondary-button danger-text" type="button" hidden>Remove Key</button>
+    <div id="key-status" class="status-line"></div>
+  </div>
+
+  <div id="remove-confirm" class="remove-confirm" hidden>
+    <div class="remove-confirm-icon">&#9888;</div>
+    <div class="remove-confirm-title">Remove your API key?</div>
+    <div class="remove-confirm-text">Removing your key will reset Teardown. You'll need to enter a new API key before using it again.</div>
+    <div class="confirm-actions">
+      <button id="remove-confirm-yes" class="btn-block danger-button" type="button">Confirm</button>
+      <button id="remove-confirm-no" class="btn-block secondary-button" type="button">Cancel</button>
+    </div>
+  </div>
+
+  <script src="key-entry.js"></script>
+</body>
+</html>
