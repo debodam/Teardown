@@ -868,7 +868,7 @@
     const typedAnswer = teardownAnswerInput.value.trim();
     teardownState.userAnswers[field.key] = typedAnswer;
 
-    teardownUserAnswer.textContent = typedAnswer || "(no answer given)";
+    teardownUserAnswer.textContent = typedAnswer || "No Answer Given.";
     teardownReadAnswer.textContent = teardownState.generatedAnswers[field.key];
 
     teardownInputArea.hidden = true;
@@ -980,7 +980,7 @@
       userLabel.textContent = "Your take";
       const userText = document.createElement("div");
       userText.className = "teardown-answer-text";
-      userText.textContent = teardownState.userAnswers[field.key] || "(no answer given)";
+      userText.textContent = teardownState.userAnswers[field.key] || "No Answer Given.";
       userCard.appendChild(userLabel);
       userCard.appendChild(userText);
       block.appendChild(userCard);
@@ -1142,6 +1142,22 @@
     confirmActions.hidden = false;
   }
 
+  // Personal portfolio/resume sites get their own terminal message instead
+  // of the fallback Yes/No offer — offering to teardown that same site's
+  // own homepage would just fail again, since there's no "different, more
+  // product-y page" to point at. Session ends here, same as clicking "Not
+  // right now" on a normal fallback: no further action, no error styling
+  // beyond a plain explanation.
+  function showPortfolioMessage() {
+    console.log("Portfolio site detected, ending session.");
+    pendingConfirmation = null;
+    hideAnalyzing();
+    confirmActions.hidden = true;
+    startBtn.hidden = false;
+    teardownTitle.textContent = "Teardown this product?";
+    setStatus("We don't analyze portfolio sites!", true);
+  }
+
   startBtn.addEventListener("click", () => {
     console.log("Start Teardown clicked");
 
@@ -1181,6 +1197,14 @@
         // own debugging only — the overlay UI just shows a clean verdict.
         console.log("GRAB_PAGE_CONTENT response received", response);
         console.log("response.rootDomain:", response.rootDomain);
+
+        // Portfolio detection only matters when isProductPage is false — a
+        // portfolio site that also sells a product/merch is still a
+        // product page first, and goes through the normal flow.
+        if (!response.isProductPage && response.isPortfolio) {
+          showPortfolioMessage();
+          return;
+        }
 
         showConfirmPrompt({
           isProductPage: response.isProductPage,
@@ -1248,6 +1272,8 @@
 
       if (response.isProductPage) {
         startTeardownGeneration(response.pageText, response.hostname, response.productName);
+      } else if (response.isPortfolio) {
+        showPortfolioMessage();
       } else {
         // No further fallback attempts — stop here.
         hideAnalyzing();

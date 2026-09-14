@@ -27,8 +27,9 @@ function extractTextFromClaudeContent(content) {
   return textBlock ? textBlock.text : null;
 }
 
-// Parses the soft check's response text into { isProductPage, productName }.
-// Expects a strict "YES: Name" / "NO" first line, but falls back to a loose
+// Parses the soft check's response text into
+// { isProductPage, isPortfolio, productName }. Expects a strict
+// "YES: Name" / "NO" / "PORTFOLIO" first line, but falls back to a loose
 // substring check (the old behavior) if Claude doesn't follow that format —
 // in that fallback path there's no name to extract, just the verdict.
 // Returns null if genuinely unparseable either way.
@@ -40,19 +41,29 @@ function parseSoftCheckResponse(text) {
   if (upperFirstLine.startsWith("YES")) {
     const colonIndex = firstLine.indexOf(":");
     const productName = colonIndex !== -1 ? firstLine.slice(colonIndex + 1).trim() : "";
-    return { isProductPage: true, productName: productName || null };
+    return { isProductPage: true, isPortfolio: false, productName: productName || null };
+  }
+
+  if (upperFirstLine.startsWith("PORTFOLIO")) {
+    return { isProductPage: false, isPortfolio: true, productName: null };
   }
 
   if (upperFirstLine.startsWith("NO")) {
-    return { isProductPage: false, productName: null };
+    return { isProductPage: false, isPortfolio: false, productName: null };
   }
 
+  // Loose fallback: check PORTFOLIO before NO, since a stray sentence like
+  // "this is not a product page, it's a portfolio site" would otherwise
+  // match "NO" as a substring of "NOT" and miss the portfolio case.
   const upperWhole = trimmed.toUpperCase();
+  if (upperWhole.includes("PORTFOLIO")) {
+    return { isProductPage: false, isPortfolio: true, productName: null };
+  }
   if (upperWhole.includes("YES")) {
-    return { isProductPage: true, productName: null };
+    return { isProductPage: true, isPortfolio: false, productName: null };
   }
   if (upperWhole.includes("NO")) {
-    return { isProductPage: false, productName: null };
+    return { isProductPage: false, isPortfolio: false, productName: null };
   }
 
   return null;
@@ -69,7 +80,7 @@ async function checkIsProductPage(pageText) {
     const { claudeApiKey } = await chrome.storage.local.get("claudeApiKey");
     if (!claudeApiKey) {
       console.warn("Teardown: no claudeApiKey set, skipping soft check.");
-      return { isProductPage: true, productName: null };
+      return { isProductPage: true, isPortfolio: false, productName: null };
     }
 
     const controller = new AbortController();
@@ -117,11 +128,16 @@ async function checkIsProductPage(pageText) {
                 "Respond on a single line in exactly this format, nothing else:\n" +
                 "YES: <the actual product or company name>\n" +
                 "or\n" +
-                "NO\n\n" +
+                "NO\n" +
+                "or\n" +
+                "PORTFOLIO\n\n" +
                 "Use the real product or company name as it appears on the page " +
                 '(e.g. "Ninja Foodi Air Fryer" or "Notion"), not a generic ' +
                 "description. If it's a product/company page but no clear name is " +
-                "identifiable, respond \"YES:\" with nothing after the colon. Do " +
+                "identifiable, respond \"YES:\" with nothing after the colon. " +
+                "Respond PORTFOLIO instead of NO if the page is a personal " +
+                "portfolio, resume, or personal site where someone is showcasing " +
+                "their own work or skills, rather than a product or company. Do " +
                 "not add any other text, punctuation, or explanation.\n\n" +
                 promptPageText
             }
@@ -154,7 +170,7 @@ async function checkIsProductPage(pageText) {
     return parsed;
   } catch (err) {
     console.error("Teardown: soft check failed, defaulting to proceed.", err);
-    return { isProductPage: true, productName: null };
+    return { isProductPage: true, isPortfolio: false, productName: null };
   }
 }
 
@@ -664,11 +680,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // Note: short/empty pageText is passed through as-is on purpose —
         // "not enough content" handling is a later step, not here.
         console.log("Starting product page check");
-        const { isProductPage, productName } = await checkIsProductPage(data.pageText);
+        const { isProductPage, isPortfolio, productName } = await checkIsProductPage(data.pageText);
 
         sendResponse({
           ok: true,
           isProductPage,
+          isPortfolio,
           productName,
           pageText: data.pageText,
           pageTitle: data.pageTitle,
@@ -715,11 +732,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const pageText = await fetchHomepageContent(domain);
 
         console.log("Starting product page check (homepage fallback)");
-        const { isProductPage, productName } = await checkIsProductPage(pageText);
+        const { isProductPage, isPortfolio, productName } = await checkIsProductPage(pageText);
 
         sendResponse({
           ok: true,
           isProductPage,
+          isPortfolio,
           productName,
           pageText,
           hostname: domain
