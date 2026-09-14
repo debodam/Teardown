@@ -10,21 +10,19 @@ Listed on the Chrome Web Store as **Teardown: Product Sense Practice**.
 
 ## Demo
 
-<!-- Add a short GIF here showing the full flow end to end, click icon -> confirm -> answer a question -> reveal -> summary. Keep it under ~15-20 seconds so the GIF file size stays reasonable. -->
-
-<!-- Example once added:
+Example once added:
 ![Teardown demo](./assets/demo.gif)
--->
+
 
 ## How it works
 
 1. Click the extension on any product or company page.
 
-<!-- <img src="./assets/step-1-confirm.png" width="360" alt="Confirmation screen showing the detected product name" /> -->
+<img src="./assets/step-1-confirm.png" width="360" alt="Confirmation screen showing the detected product name" />
 
 2. Teardown checks the page and confirms what it found (or offers to check the site's homepage instead if the current page isn't a clear product/company page).
 
-<!-- <img src="./assets/step-2-fallback.png" width="360" alt="Homepage fallback prompt" /> -->
+<img src="./assets/step-2-fallback.png" width="360" alt="Homepage fallback prompt" />
 
 3. Answer five questions, one at a time, writing your own take before revealing the AI's:
    - Who is this built for?
@@ -33,11 +31,11 @@ Listed on the Chrome Web Store as **Teardown: Product Sense Practice**.
    - What's the biggest weak point here?
    - What metric would this product move?
 
-<!-- <img src="./assets/step-3-question.png" width="360" alt="A question card showing write-then-reveal" /> -->
+<img src="./assets/step-3-question.png" width="360" alt="A question card showing write-then-reveal" />
 
 4. See a summary of all five answers side by side, along with a one-time score (1-5) reflecting how specific and grounded your answers were.
 
-<!-- <img src="./assets/step-4-summary.png" width="360" alt="Summary page with score ring" /> -->
+<img src="./assets/step-4-summary.png" width="360" alt="Summary page with score ring" />
 
 This is a practice tool, not a grading tool. The goal is sharper instincts, not a "correct" answer to match.
 
