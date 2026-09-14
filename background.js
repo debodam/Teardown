@@ -78,7 +78,13 @@ async function checkIsProductPage(pageText) {
     // This is the exact string going into the prompt below — logged in
     // full (not sliced for display) so we can see precisely what Claude
     // saw when a classification looks wrong.
-    const promptPageText = pageText.slice(0, 1500);
+    // Sliced to 800 (was 1500): title + meta description are already
+    // prioritized first when pageText is built (grabPageContent), and
+    // they're the reliable signal for this yes/no + name classification —
+    // the raw innerText tail past that is mostly nav/boilerplate noise, so
+    // paying to send an extra 700 characters of it bought nothing. Cost
+    // optimization, not a quality change.
+    const promptPageText = pageText.slice(0, 800);
     console.log("Final pageText being sent to Claude:", promptPageText);
 
     let response;
@@ -201,6 +207,7 @@ async function generateTeardown(pageText, hostname, productName) {
       "in specific details actually present in the page content, such as names, " +
       "numbers, claims, features, or wording, rather than generic industry " +
       "statements that could apply to any competitor.\n\n" +
+      "Keep every answer to one sentence, no more than 30 words.\n\n" +
       "Never use em dashes in any of the five answers. Use periods, commas, or " +
       "separate sentences instead.\n\n" +
       "Every answer must use proper punctuation and capitalization: start with a " +
@@ -230,7 +237,18 @@ async function generateTeardown(pageText, hostname, productName) {
         },
         body: JSON.stringify({
           model: CLAUDE_TEARDOWN_MODEL,
-          max_tokens: 800,
+          // max_tokens is a combined cap across thinking + visible output.
+          // effort:"low" still permits some thinking, so this needs enough
+          // headroom to cover that plus the actual 5-field JSON, or a
+          // truncated mid-thought response fails to parse below. Bumped
+          // from 800 (sized for the old no-thinking-by-default reality).
+          max_tokens: 1500,
+          // Sonnet 5 runs adaptive thinking by default when this is left
+          // unset — real, billed reasoning tokens never shown anywhere in
+          // the UI. This is a well-specified, non-agentic 5-sentence
+          // extraction task, not deep multi-step reasoning, so low effort
+          // is the expected sweet spot here (cost optimization).
+          output_config: { effort: "low" },
           messages: [{ role: "user", content: prompt }]
         }),
         signal: controller.signal
@@ -322,10 +340,10 @@ async function generateScore(answers, hostname, productName) {
       '{"score": <integer from 1 to 5>, "note": "..."}\n\n' +
       "- score: an integer from 1 to 5 judging the specificity and groundedness of " +
       "the user's five answers overall.\n" +
-      "- note: one short sentence explaining the score in plain language, " +
-      "referencing what actually happened in this session (which answers were " +
-      "specific, which could have gone further), not a generic statement that " +
-      "could apply to any session.\n\n" +
+      "- note: one sentence, no more than 25 words, explaining the score in plain " +
+      "language, referencing what actually happened in this session (which " +
+      "answers were specific, which could have gone further), not a generic " +
+      "statement that could apply to any session.\n\n" +
       "Never use em dashes. Use periods, commas, or separate sentences instead. Use " +
       "proper punctuation and capitalization, and end with a period.\n\n" +
       (productName ? `Product name: ${productName}\n` : "") +
@@ -349,7 +367,15 @@ async function generateScore(answers, hostname, productName) {
         },
         body: JSON.stringify({
           model: CLAUDE_TEARDOWN_MODEL,
-          max_tokens: 200,
+          // Same combined thinking+output cap issue as generateTeardown:
+          // 200 was sized for the old no-thinking-by-default reality and
+          // left no room for effort:"low"'s residual thinking, so the
+          // score's tiny JSON was getting cut off mid-response.
+          max_tokens: 1024,
+          // Same reasoning as generateTeardown: a simple 1-5 rubric
+          // judgment doesn't need Sonnet 5's default adaptive thinking,
+          // which otherwise bills invisible reasoning tokens.
+          output_config: { effort: "low" },
           messages: [{ role: "user", content: prompt }]
         }),
         signal: controller.signal
