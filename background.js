@@ -546,10 +546,13 @@ chrome.action.onClicked.addListener(async (tab) => {
     // overlay.js builds its own Shadow DOM and injects its CSS inline into
     // that shadow root (see overlay.js for why) — no separate insertCSS
     // call needed, a shadow root couldn't be reached by insertCSS's
-    // page-<head> injection anyway.
+    // page-<head> injection anyway. Order matters here — files listed in
+    // one executeScript call run in this exact sequence, and overlay.js's
+    // window.__teardownOverlay.styles reference needs overlay-styles.js
+    // to have already run.
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      files: ["overlay.js"]
+      files: ["overlay-styles.js", "overlay.js", "teardown-flow.js"]
     });
 
     console.log("Teardown: overlay injected into tab", tab.id);
