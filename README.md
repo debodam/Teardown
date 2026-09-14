@@ -1,12 +1,14 @@
-# Teardown 
+<div align="center">
 
 <img src="./assets/icon128.png" width="64" height="64" alt="Teardown icon" />
 
+Teardown
+
 Practice your product sense on any product page, in one click.
 
-Teardown is a Chrome extension that turns any product or company page into a quick, structured practice session. It checks the page, asks five questions about it, and lets you write your own answer before revealing an AI-generated perspective on the same question, so you can train your instincts by comparing your own read against a structured one instead of just reading a summary.
+Teardown is a Chrome extension that turns any product or company page into a quick, structured practice session.
 
-Listed on the Chrome Web Store as **Teardown: Product Sense Practice**.
+</div>
 
 ## Demo
 
