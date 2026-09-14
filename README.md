@@ -1,4 +1,8 @@
-# Teardown <img src="./assets/icon128.png" width="64" height="64" alt="Teardown icon" />
+# Teardown 
+<p align="center">
+  <img src="assets/colibri-logo.svg" width="560" alt="colibrì — tiny engine, immense model">
+</p>
+<img src="./assets/icon128.png" width="64" height="64" alt="Teardown icon" />
 
 Practice your product sense on any product page, in one click.
 
