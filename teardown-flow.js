@@ -160,7 +160,6 @@ window.__teardownOverlay = window.__teardownOverlay || {};
   // section's own hidden state already shows/hides its button — no need
   // to toggle the buttons themselves separately.
   gearBtn.addEventListener("click", () => {
-    console.log("Teardown: opening settings.");
     teardownTitle.textContent = "Settings";
     // #teardown-status sits above #teardown-main and #teardown-settings-view
     // as a shared sibling, not inside either one — toggling teardownMain's
@@ -175,7 +174,6 @@ window.__teardownOverlay = window.__teardownOverlay || {};
   });
 
   homeBtn.addEventListener("click", () => {
-    console.log("Teardown: leaving settings, resuming last step.");
     teardownTitle.textContent = currentStepTitle();
     statusEl.hidden = false;
     settingsView.hidden = true;
@@ -282,9 +280,6 @@ window.__teardownOverlay = window.__teardownOverlay || {};
     showAnalyzing(productName);
 
     const message = { type: "GENERATE_TEARDOWN", pageText, hostname, productName };
-    // hostname/productName only — pageText is the page's own content, no
-    // need to echo the whole thing into this page's own console.
-    console.log("Sending GENERATE_TEARDOWN message for:", hostname, productName);
 
     chrome.runtime.sendMessage(message, (response) => {
       hideAnalyzing();
@@ -300,14 +295,6 @@ window.__teardownOverlay = window.__teardownOverlay || {};
         resetToStartWithError(`Error: ${errMsg}`);
         return;
       }
-
-      console.log("Teardown generated:", {
-        who: response.who,
-        job: response.job,
-        value: response.value,
-        gap: response.gap,
-        metric: response.metric
-      });
 
       teardownState = {
         currentIndex: 0,
@@ -408,9 +395,6 @@ window.__teardownOverlay = window.__teardownOverlay || {};
       hostname: teardownState.hostname,
       productName: teardownState.productName
     };
-    // hostname/productName only — the answers array carries the user's
-    // own typed answers, no need to echo those into the console either.
-    console.log("Sending GENERATE_SCORE message for:", message.hostname, message.productName);
 
     chrome.runtime.sendMessage(message, (response) => {
       if (chrome.runtime.lastError) {
@@ -425,7 +409,6 @@ window.__teardownOverlay = window.__teardownOverlay || {};
         return;
       }
 
-      console.log("Score generated:", response);
       updateScoreRing(response.score);
       scoreTierEl.textContent = response.tier;
       scoreNoteEl.textContent = response.note;
@@ -506,8 +489,6 @@ window.__teardownOverlay = window.__teardownOverlay || {};
   // Fully resets the overlay's in-memory state back to the initial screen,
   // ready to run the soft check again from scratch on a new page.
   function resetToInitialState() {
-    console.log("Start Over clicked, resetting state");
-
     teardownState = null;
     pendingConfirmation = null;
 
@@ -599,9 +580,6 @@ window.__teardownOverlay = window.__teardownOverlay || {};
   // yet) falls back to the plain generic phrasing.
   function showConfirmPrompt(confirmation) {
     pendingConfirmation = confirmation;
-    // isProductPage/hostname only — confirmation also carries this page's
-    // full text (pageText), no need to echo that into the console.
-    console.log("pendingConfirmation set, isProductPage:", confirmation.isProductPage, "hostname:", confirmation.hostname);
     hideAnalyzing();
     teardownTitle.textContent = "Teardown this product?";
 
@@ -633,7 +611,6 @@ window.__teardownOverlay = window.__teardownOverlay || {};
   // right now" on a normal fallback: no further action, no error styling
   // beyond a plain explanation.
   function showPortfolioMessage() {
-    console.log("Portfolio site detected, ending session.");
     pendingConfirmation = null;
     hideAnalyzing();
     confirmActions.hidden = true;
@@ -644,8 +621,6 @@ window.__teardownOverlay = window.__teardownOverlay || {};
   }
 
   startBtn.addEventListener("click", () => {
-    console.log("Start Teardown clicked");
-
     if (!isExtensionContextValid()) {
       setStatus("This overlay is out of date — refresh the page and click the icon again.", true);
       return;
@@ -659,7 +634,6 @@ window.__teardownOverlay = window.__teardownOverlay || {};
     const message = { type: "GRAB_PAGE_CONTENT" };
 
     try {
-      console.log("Sending message to background.js", message);
       chrome.runtime.sendMessage(message, (response) => {
         if (chrome.runtime.lastError) {
           hideAnalyzing();
@@ -673,11 +647,6 @@ window.__teardownOverlay = window.__teardownOverlay || {};
           resetToStartWithError(`Error: ${errMsg}`);
           return;
         }
-
-        // isProductPage/rootDomain only — response also carries this
-        // page's full extracted text (pageText/pageTitle), no need to
-        // echo that into the console.
-        console.log("GRAB_PAGE_CONTENT response received, isProductPage:", response.isProductPage, "rootDomain:", response.rootDomain);
 
         // Portfolio detection only matters when isProductPage is false — a
         // portfolio site that also sells a product/merch is still a
@@ -703,7 +672,6 @@ window.__teardownOverlay = window.__teardownOverlay || {};
 
   confirmYesBtn.addEventListener("click", () => {
     const confirmation = pendingConfirmation;
-    console.log("Teardown confirmed, isProductPage:", confirmation && confirmation.isProductPage);
 
     if (!isExtensionContextValid()) {
       setStatus("This overlay is out of date — refresh the page and click the icon again.", true);
@@ -745,7 +713,6 @@ window.__teardownOverlay = window.__teardownOverlay || {};
       showAnalyzing();
 
       const message = { type: "CHECK_HOMEPAGE_FALLBACK", domain };
-      console.log("Sending CHECK_HOMEPAGE_FALLBACK message for domain:", domain);
 
       chrome.runtime.sendMessage(message, (response) => {
         if (chrome.runtime.lastError) {
@@ -769,8 +736,6 @@ window.__teardownOverlay = window.__teardownOverlay || {};
           );
           return;
         }
-
-        console.log("Homepage fallback content received, isProductPage:", response.isProductPage);
 
         if (response.isProductPage) {
           startTeardownGeneration(response.pageText, response.hostname, response.productName);
@@ -811,7 +776,6 @@ window.__teardownOverlay = window.__teardownOverlay || {};
   });
 
   confirmNoBtn.addEventListener("click", () => {
-    console.log("Teardown declined");
     pendingConfirmation = null;
     confirmActions.hidden = true;
     startBtn.hidden = false;
