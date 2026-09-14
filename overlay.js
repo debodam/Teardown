@@ -503,6 +503,25 @@
         font-size: 11px;
         color: #A7ADBC;
       }
+
+      /* Applied whenever one full screen/state replaces another (initial
+         prompt, confirmation, a question card, the analyzing state, the
+         summary). Deliberately opacity-only — no slide/scale — and short
+         enough to read as polish rather than a slideshow. Never applied
+         while the user is typing or interacting within a card; see the
+         fadeIn() call sites for exactly which transitions trigger it. */
+      @keyframes teardown-fade-in {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      .teardown-fade-in {
+        animation: teardown-fade-in 180ms ease-out;
+      }
     </style>
 
     <div id="teardown-card" class="teardown-card">
@@ -584,6 +603,8 @@
 
       <div id="teardown-settings-view" hidden>
         <div class="teardown-microprompt">Required to check pages and generate teardowns. Stored locally in your browser, only sent to Claude.</div>
+        <div class="teardown-microprompt">Your API key is stored only in your browser and never leaves your device except to communicate directly with Anthropic. This extension has no backend server and never sees, collects, or stores your key. You are responsible for keeping your own key secure.</div>
+        <div class="teardown-microprompt">Input your key once and start your teardowns!</div>
         <label for="teardown-claude-key-input">Claude API key</label>
         <input type="password" id="teardown-claude-key-input" class="teardown-input" placeholder="sk-ant-...">
         <button id="teardown-save-key-btn" class="teardown-btn-block primary-button">Save Key</button>
@@ -645,6 +666,33 @@
     statusEl.classList.toggle("teardown-status--error", !!isError);
   }
 
+  // Plays the fade-in defined on .teardown-fade-in against each element
+  // passed in. Removing the class before re-adding it (with a forced
+  // reflow in between) is what lets the animation restart even when the
+  // class is already present from the last transition — just re-adding an
+  // already-present class is a no-op as far as CSS animations go. Call
+  // this AFTER unhiding an element (an element with `hidden` set has no
+  // box, so there's nothing for the animation to render against).
+  function fadeIn(...elements) {
+    elements.forEach((el) => {
+      if (!el) return;
+      el.classList.remove("teardown-fade-in");
+      void el.offsetWidth;
+      el.classList.add("teardown-fade-in");
+    });
+  }
+
+  // Shared landing spot for the several near-identical "something failed,
+  // fall back to the start screen" branches scattered through the message
+  // callbacks below — keeps the fade-in wired in one place instead of
+  // repeating it at every call site.
+  function resetToStartWithError(message) {
+    teardownTitle.textContent = "Teardown this product?";
+    setStatus(message, true);
+    startBtn.hidden = false;
+    fadeIn(teardownTitle, statusEl, startBtn);
+  }
+
   // Closing fully removes the overlay from the DOM (not just hides it) —
   // clicking the icon again builds a fresh one from scratch.
   closeBtn.addEventListener("click", () => {
@@ -685,6 +733,14 @@
   gearBtn.addEventListener("click", () => {
     console.log("Teardown: opening settings.");
     teardownTitle.textContent = "Settings";
+    // #teardown-status sits above #teardown-main and #teardown-settings-view
+    // as a shared sibling, not inside either one — toggling teardownMain's
+    // own hidden state never touched it, so whatever main-flow text was
+    // last set there (e.g. "Click Start Teardown to analyze this page.")
+    // kept rendering right through the Settings view. Hide it explicitly
+    // whenever Settings is open; Settings has its own dedicated status line
+    // (#teardown-settings-status) for save/clear feedback instead.
+    statusEl.hidden = true;
     teardownMain.hidden = true;
     settingsView.hidden = false;
   });
@@ -692,6 +748,7 @@
   homeBtn.addEventListener("click", () => {
     console.log("Teardown: leaving settings, resuming last step.");
     teardownTitle.textContent = currentStepTitle();
+    statusEl.hidden = false;
     settingsView.hidden = true;
     teardownMain.hidden = false;
   });
@@ -780,6 +837,7 @@
     currentAnalyzingTitle = productName ? `Analyzing ${productName}` : "Analyzing";
     teardownTitle.textContent = currentAnalyzingTitle;
     loadingEl.hidden = false;
+    fadeIn(teardownTitle, loadingEl);
     startAnalyzingRotation();
   }
 
@@ -801,18 +859,14 @@
       hideAnalyzing();
 
       if (chrome.runtime.lastError) {
-        teardownTitle.textContent = "Teardown this product?";
-        setStatus(`Error: ${chrome.runtime.lastError.message}`, true);
-        startBtn.hidden = false;
+        resetToStartWithError(`Error: ${chrome.runtime.lastError.message}`);
         return;
       }
 
       if (!response || !response.ok) {
         const errMsg = response && response.error ? response.error : "Unknown error.";
         console.error("Teardown generation failed:", errMsg);
-        teardownTitle.textContent = "Teardown this product?";
-        setStatus(`Error: ${errMsg}`, true);
-        startBtn.hidden = false;
+        resetToStartWithError(`Error: ${errMsg}`);
         return;
       }
 
@@ -860,6 +914,7 @@
     teardownInputArea.hidden = false;
     teardownRevealArea.hidden = true;
     teardownNextBtn.hidden = true;
+    fadeIn(teardownTitle, teardownFlow);
     teardownAnswerInput.focus();
   }
 
@@ -874,6 +929,7 @@
     teardownInputArea.hidden = true;
     teardownRevealArea.hidden = false;
     teardownNextBtn.hidden = false;
+    fadeIn(teardownRevealArea);
 
     const isLastField = teardownState.currentIndex === TEARDOWN_FIELDS.length - 1;
     teardownNextBtn.textContent = isLastField ? "View Summary" : "Next";
@@ -1009,6 +1065,7 @@
     // the product, falling back to the hostname if no name was ever
     // resolved for this run.
     setStatus(teardownState.productName || teardownState.hostname || "");
+    fadeIn(teardownTitle, statusEl, teardownSummary);
 
     requestSessionScore();
   }
@@ -1043,6 +1100,7 @@
     startBtn.hidden = false;
     teardownTitle.textContent = "Teardown this product?";
     setStatus("Click Start Teardown to analyze this page.");
+    fadeIn(teardownTitle, statusEl, startBtn);
   }
 
   teardownSubmitBtn.addEventListener("click", submitCurrentTeardownField);
@@ -1140,6 +1198,7 @@
 
     startBtn.hidden = true;
     confirmActions.hidden = false;
+    fadeIn(teardownTitle, statusEl, confirmActions);
   }
 
   // Personal portfolio/resume sites get their own terminal message instead
@@ -1156,6 +1215,7 @@
     startBtn.hidden = false;
     teardownTitle.textContent = "Teardown this product?";
     setStatus("We don't analyze portfolio sites!", true);
+    fadeIn(teardownTitle, statusEl, startBtn);
   }
 
   startBtn.addEventListener("click", () => {
@@ -1178,18 +1238,14 @@
       chrome.runtime.sendMessage(message, (response) => {
         if (chrome.runtime.lastError) {
           hideAnalyzing();
-          teardownTitle.textContent = "Teardown this product?";
-          setStatus(`Error: ${chrome.runtime.lastError.message}`, true);
-          startBtn.hidden = false;
+          resetToStartWithError(`Error: ${chrome.runtime.lastError.message}`);
           return;
         }
 
         if (!response || !response.ok) {
           const errMsg = response && response.error ? response.error : "Unknown error.";
           hideAnalyzing();
-          teardownTitle.textContent = "Teardown this product?";
-          setStatus(`Error: ${errMsg}`, true);
-          startBtn.hidden = false;
+          resetToStartWithError(`Error: ${errMsg}`);
           return;
         }
 
@@ -1252,9 +1308,7 @@
     chrome.runtime.sendMessage(message, (response) => {
       if (chrome.runtime.lastError) {
         hideAnalyzing();
-        teardownTitle.textContent = "Teardown this product?";
-        setStatus(`Error: ${chrome.runtime.lastError.message}`, true);
-        startBtn.hidden = false;
+        resetToStartWithError(`Error: ${chrome.runtime.lastError.message}`);
         return;
       }
 
@@ -1262,9 +1316,7 @@
         const errMsg = response && response.error ? response.error : "Unknown error.";
         console.error("Homepage fallback check failed:", errMsg);
         hideAnalyzing();
-        teardownTitle.textContent = "Teardown this product?";
-        setStatus("Couldn't find a clear product page here.", true);
-        startBtn.hidden = false;
+        resetToStartWithError("Couldn't find a clear product page here.");
         return;
       }
 
@@ -1277,9 +1329,7 @@
       } else {
         // No further fallback attempts — stop here.
         hideAnalyzing();
-        teardownTitle.textContent = "Teardown this product?";
-        setStatus("Couldn't find a clear product page here.", true);
-        startBtn.hidden = false;
+        resetToStartWithError("Couldn't find a clear product page here.");
       }
     });
   });
@@ -1291,13 +1341,19 @@
     startBtn.hidden = false;
     teardownTitle.textContent = "Teardown this product?";
     setStatus("Click Start Teardown to analyze this page.");
+    fadeIn(teardownTitle, statusEl, startBtn);
   });
 
-  // Pre-fill the input with whatever key is already stored, if any.
+  const KEY_INPUT_PLACEHOLDER_EMPTY = "sk-ant-...";
+  const KEY_INPUT_PLACEHOLDER_SAVED = "Key saved ✓";
+
+  // Never pre-fill the input with the actual stored key — once a key has
+  // been saved, the field should never make it readable/copyable again,
+  // including the next time Settings is opened. The placeholder alone
+  // tells the user whether a key is already on file.
   chrome.storage.local.get("claudeApiKey", ({ claudeApiKey }) => {
-    if (claudeApiKey) {
-      claudeApiKeyInput.value = claudeApiKey;
-    }
+    claudeApiKeyInput.value = "";
+    claudeApiKeyInput.placeholder = claudeApiKey ? KEY_INPUT_PLACEHOLDER_SAVED : KEY_INPUT_PLACEHOLDER_EMPTY;
   });
 
   saveTokenBtn.addEventListener("click", () => {
@@ -1308,6 +1364,12 @@
 
     const key = claudeApiKeyInput.value.trim();
     chrome.storage.local.set({ claudeApiKey: key }, () => {
+      // Blank the field right after a successful save (or clear) — the real
+      // key lives in chrome.storage.local and is what every API call
+      // actually uses; the visible input is just for entry, never a
+      // long-term display of it.
+      claudeApiKeyInput.value = "";
+      claudeApiKeyInput.placeholder = key ? KEY_INPUT_PLACEHOLDER_SAVED : KEY_INPUT_PLACEHOLDER_EMPTY;
       settingsStatus.textContent = key ? "Key saved." : "Key cleared.";
     });
   });
