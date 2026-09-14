@@ -135,9 +135,16 @@ async function checkIsProductPage(pageText) {
                 '(e.g. "Ninja Foodi Air Fryer" or "Notion"), not a generic ' +
                 "description. If it's a product/company page but no clear name is " +
                 "identifiable, respond \"YES:\" with nothing after the colon. " +
-                "Respond PORTFOLIO instead of NO if the page is a personal " +
-                "portfolio, resume, or personal site where someone is showcasing " +
-                "their own work or skills, rather than a product or company. Do " +
+                "Respond PORTFOLIO instead of NO only if the entire page is a " +
+                "standalone personal portfolio, resume, or personal website that " +
+                "someone built themselves specifically to showcase their own work " +
+                "(e.g. a personal domain like janedoe.dev, or a personal site " +
+                "hosted on GitHub Pages, Carrd, Notion, etc.). Do NOT respond " +
+                "PORTFOLIO for a profile, dashboard, feed, or account page on a " +
+                "larger platform, such as a GitHub user's dashboard or repo list, " +
+                "a LinkedIn profile, or a Twitter/X profile, those are NO, not " +
+                "PORTFOLIO, even though they describe one person's background or " +
+                "work, since the page itself isn't a self-made portfolio site. Do " +
                 "not add any other text, punctuation, or explanation.\n\n" +
                 promptPageText
             }
