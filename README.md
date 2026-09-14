@@ -4,11 +4,11 @@
 
 ## Teardown
 
+</div>
+
 Practice your product sense on any product page, in one click.
 
 Teardown is a Chrome extension that turns any product or company page into a quick, structured practice session.
-
-</div>
 
 ## Demo
 
