@@ -14,20 +14,32 @@ Teardown is a Chrome extension that turns any product or company page into a qui
 
 </div>
 
-## Demo
+## See It in Action
+
+<div align="center">
 
 ![Teardown demo](./assets/demo.gif)
+
+</div>
 
 
 ## How it works
 
 1. Click the extension on any product or company page.
 
+<div align="center">
+
 <img src="./assets/step-1-confirm.png" width="360" alt="Confirmation screen showing the detected product name" />
+
+</div>
 
 2. Teardown checks the page and confirms what it found (or offers to check the site's homepage instead if the current page isn't a clear product/company page).
 
+<div align="center">
+
 <img src="./assets/step-2-fallback.png" width="360" alt="Homepage fallback prompt" />
+
+</div>
 
 3. Answer five questions, one at a time, writing your own take before revealing the AI's:
    - Who is this built for?
@@ -36,11 +48,19 @@ Teardown is a Chrome extension that turns any product or company page into a qui
    - What's the biggest weak point here?
    - What metric would this product move?
 
+<div align="center">
+
 <img src="./assets/step-3-question.png" width="360" alt="A question card showing write-then-reveal" />
+
+</div>
 
 4. See a summary of all five answers side by side, along with a one-time score (1-5) reflecting how specific and grounded your answers were.
 
+<div align="center">
+
 <img src="./assets/step-4-summary.png" width="360" alt="Summary page with score ring" />
+
+</div>
 
 This is a practice tool, not a grading tool. The goal is sharper instincts, not a "correct" answer to match.
 
@@ -74,14 +94,14 @@ This was independently security-audited during development, including a live net
 
 Or install directly from the [Chrome Web Store](#) once live.
 
-## Setup
+## Add Your API Key
 
 1. Click the extension icon, onboarding will walk you through getting a Claude API key
 2. Or go to Settings (gear icon) any time to add or update your key
 
 Note: Teardown won't work on Chrome's internal pages (like `chrome://extensions`) or the Chrome Web Store itself, a browser restriction affecting every extension, not a bug.
 
-## Tech
+## Tech Stack
 
 - Manifest V3 Chrome extension
 - Vanilla JS, no framework, no build step
