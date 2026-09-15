@@ -1,15 +1,18 @@
 <div align="center">
 
-<img src="./assets/icon128.png" width="64" height="64" alt="Teardown icon" />
-
-</div>
+<img src="./assets/icon128.png" width="72" height="72" alt="Teardown icon" />
 
 # Teardown
 
+**Practice your product sense on any product page, in one click.**
 
-Practice your product sense on any product page, in one click.
+Teardown is a Chrome extension that turns any product or company page into a quick, structured practice session. It checks the page, asks five questions about it, and lets you write your own answer before revealing an AI-generated perspective on the same question.
 
-Teardown is a Chrome extension that turns any product or company page into a quick, structured practice session.
+<!-- TODO: point these at the real site and Chrome Web Store listing once they're live -->
+[![Website](https://img.shields.io/badge/Website-000000?style=for-the-badge&logoColor=white)](#)
+[![Chrome Web Store](https://img.shields.io/badge/Chrome%20Web%20Store-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)](#)
+
+</div>
 
 ## Demo
 
