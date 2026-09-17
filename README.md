@@ -8,9 +8,9 @@
 
 Teardown is a Chrome extension that turns any product or company page into a quick, structured practice session. It checks the page, asks five questions about it, and lets you write your own answer before revealing an AI-generated perspective on the same question.
 
-<!-- TODO: point these at the real site and Chrome Web Store listing once they're live -->
+<!-- TODO: point this at the real site once it's live -->
 [![Website](https://img.shields.io/badge/Website-000000?style=for-the-badge&logoColor=white)](#)
-[![Chrome Web Store](https://img.shields.io/badge/Chrome%20Web%20Store-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)](#)
+[![Chrome Web Store](https://img.shields.io/badge/Chrome%20Web%20Store-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/teardown/kflapiihpakeccghanbpeifamhmgcmlc)
 
 </div>
 
@@ -92,7 +92,7 @@ This was independently security-audited during development, including a live net
 4. Click "Load unpacked"
 5. Select this folder
 
-Or install directly from the [Chrome Web Store](#) once live.
+Or install directly from the [Chrome Web Store](https://chromewebstore.google.com/detail/teardown/kflapiihpakeccghanbpeifamhmgcmlc).
 
 ## Add Your API Key
 
